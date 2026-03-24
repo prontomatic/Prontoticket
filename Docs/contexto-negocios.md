@@ -1,0 +1,1 @@
+Todo lo relacionado al contexto de negocios del proyecto.

@@ -1,0 +1,1 @@
+Todo lo relacionado a la definicion tecnica del proyecto.
