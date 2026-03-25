@@ -8,8 +8,8 @@ Este documento describe la arquitectura lógica y los procesos técnicos del sis
 
 El desarrollo se basa en un ecosistema de JavaScript moderno diseñado para la escalabilidad y el rendimiento:
 
-- **Frontend & API:** Next.js (App Router)
-- **Backend Runtime:** Node.js
+- **Frontend:** React
+- **Backend:** Next.js
 - **Base de Datos:** PostgreSQL alojado en Supabase
 - **ORM:** Prisma para el modelado y consulta de datos
 
