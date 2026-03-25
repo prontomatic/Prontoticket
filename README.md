@@ -120,8 +120,8 @@ Los siguientes aspectos quedan explícitamente **excluidos** del alcance de la v
 
 | Capa | Tecnología |
 |---|---|
-| Frontend & API | Next.js (App Router) |
-| Backend Runtime | Node.js |
+| Frontend | React |
+| Backend / Framework | Next.js |
 | Base de Datos | PostgreSQL (alojado en Supabase) |
 | ORM | Prisma |
 | Servicio de Webhook / Email | SendGrid (Inbound Parse) |
