@@ -1,13 +1,123 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  AGENTE
+  SUPERVISOR
+  ADMINISTRADOR
+}
+
+enum TicketStatus {
+  ABIERTO
+  EN_PROCESO_INTERNO
+  EN_ESPERA_CLIENTE
+  CERRADO
+}
+
+enum SenderType {
+  CLIENTE
+  AGENTE
+}
+
+enum SendStatus {
+  ENVIADO
+  ERROR
+  PENDIENTE
+}
+
+model Profile {
+  id             String          @id // UUID assigned by Supabase Auth
+  email          String          @unique
+  full_name      String
+  role           UserRole        @default(AGENTE)
+  is_active      Boolean         @default(true)
+  created_at     DateTime        @default(now())
+
+  // Relations
+  tickets        Ticket[]        @relation("AssignedAgent")
+  messages       Message[]       @relation("MessageAuthor")
+  status_changes StatusHistory[] @relation("ChangedByAgent")
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+
+  tickets     Ticket[]
+}
+
+model Ticket {
+  id                   Int          @id @default(autoincrement())
+  subject              String
+  content              String
+  status               TicketStatus @default(ABIERTO)
+  client_email         String
+  client_rut           String?
+  client_phone         String?
+  client_address       String?
+  enrichment_note      String?
+  category_id          Int?
+  assigned_to          String?
+  created_at           DateTime     @default(now())
+  updated_at           DateTime     @updatedAt
+  closed_at            DateTime?
+  last_client_reply_at DateTime?
+
+  // Relations
+  category             Category?    @relation(fields: [category_id], references: [id])
+  agent                Profile?     @relation("AssignedAgent", fields: [assigned_to], references: [id])
+  messages             Message[]
+  status_history       StatusHistory[]
+}
+
+model Message {
+  id                Int        @id @default(autoincrement())
+  ticket_id         Int
+  sender_type       SenderType
+  author_id         String?
+  body              String
+  message_id_header String?    @unique
+  send_status       SendStatus @default(ENVIADO)
+  sent_at           DateTime   @default(now())
+
+  // Relations
+  ticket            Ticket     @relation(fields: [ticket_id], references: [id])
+  author            Profile?   @relation("MessageAuthor", fields: [author_id], references: [id])
+  attachments       Attachment[]
+}
+
+model Attachment {
+  id           Int      @id @default(autoincrement())
+  message_id   Int
+  file_name    String
+  storage_path String
+  mime_type    String
+  file_size    Int?
+  created_at   DateTime @default(now())
+
+  // Relations
+  message      Message  @relation(fields: [message_id], references: [id])
+}
+
+model StatusHistory {
+  id               Int          @id @default(autoincrement())
+  ticket_id        Int
+  previous_status  TicketStatus?
+  new_status       TicketStatus
+  changed_by       String?
+  is_system_action Boolean      @default(false)
+  changed_at       DateTime     @default(now())
+
+  // Relations
+  ticket           Ticket       @relation(fields: [ticket_id], references: [id])
+  agent            Profile?     @relation("ChangedByAgent", fields: [changed_by], references: [id])
 }

@@ -1,0 +1,19 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/legacy-client"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("LEGACY_DATABASE_URL")
+}
+
+model LegacyUser {
+  id        Int     @id @default(autoincrement())
+  email     String  @unique
+  rut       String?
+  direccion String?
+  telefono  String?
+
+  @@map("users")
+}
