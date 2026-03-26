@@ -625,3 +625,88 @@ Las siguientes prácticas de accesibilidad se aplican en toda la interfaz:
 | **Roles ARIA** | Las columnas Kanban tienen `role="region"` con `aria-label` descriptivo. Los badges de estado tienen `aria-label` con el nombre completo del estado. |
 | **Mensajes de estado** | Los toasts y cambios de estado usan `aria-live="polite"` para ser anunciados por lectores de pantalla sin interrumpir el flujo del usuario. |
 | **Indicador de foco visible** | Todos los elementos focusables muestran un anillo de foco visible: `outline: 2px solid #003F8A; outline-offset: 2px`. Nunca se usa `outline: none` sin un reemplazo visual. |
+ 
+---
+ 
+## 11. Mapa de Rutas del Frontend
+ 
+ProntoTicket define las siguientes rutas de navegación dentro de la aplicación Next.js (App Router). Todas las rutas excepto `/login` requieren sesión activa; un usuario no autenticado es redirigido automáticamente a `/login`.
+ 
+### 11.1. Tabla de Rutas
+ 
+| Ruta | Archivo en `src/app/` | Acceso | Descripción |
+|---|---|---|---|
+| `/login` | `login/page.js` | Público | Pantalla de inicio de sesión. Formulario de email y contraseña. Redirige a `/dashboard` tras autenticación exitosa. |
+| `/dashboard` | `dashboard/page.js` | Todos los roles | Dashboard principal con la vista Kanban de tickets. Punto de entrada tras el login. |
+| `/dashboard/tickets/[id]` | `dashboard/tickets/[id]/page.js` | Todos los roles | Vista de detalle de un ticket específico. Incluye hilo de mensajes, panel de datos del cliente y editor de respuesta. |
+| `/dashboard/metricas` | `dashboard/metricas/page.js` | Supervisor, Admin | Panel de métricas de desempeño del equipo. Incluye tarjetas de KPIs globales y tabla de desempeño por agente. |
+| `/admin/usuarios` | `admin/usuarios/page.js` | Admin | Gestión de usuarios del sistema. Listado con opciones de crear, editar, activar y desactivar cuentas. |
+| `/admin/usuarios/nuevo` | `admin/usuarios/nuevo/page.js` | Admin | Formulario de creación de nuevo usuario. Campos: nombre, email, rol, contraseña inicial. |
+| `/admin/usuarios/[id]` | `admin/usuarios/[id]/page.js` | Admin | Formulario de edición de usuario existente. Permite modificar nombre, rol y estado activo. |
+| `/admin/categorias` | `admin/categorias/page.js` | Admin | Gestión de categorías de tickets. Listado con opciones de crear, editar y desactivar. |
+| `/admin/configuracion` | `admin/configuracion/page.js` | Admin | Parámetros generales del sistema. Incluye el umbral configurable de la notificación de cortesía (DP-03). |
+ 
+### 11.2. Flujo de Autenticación y Primera Sesión
+ 
+**Flujo de login:**
+ 
+```
+Usuario accede a cualquier ruta protegida
+  └─► Middleware de Next.js detecta que no hay sesión activa
+        └─► Redirige a /login
+              └─► Usuario ingresa email y contraseña institucional
+                    └─► Supabase Auth valida credenciales
+                          ├─► Éxito → JWT almacenado en cookie HttpOnly
+                          │           → Redirige a /dashboard
+                          └─► Fallo  → Mensaje de error en pantalla
+                                       → Permanece en /login
+```
+ 
+**Primera sesión de un usuario nuevo:**
+Cuando el Administrador crea un nuevo usuario desde `/admin/usuarios/nuevo`, el sistema genera la cuenta en Supabase Auth con la contraseña inicial definida por el Administrador. En la primera sesión, el usuario no recibe ningún flujo de onboarding especial — accede directamente al dashboard con sus permisos de rol asignados. Se recomienda que el Administrador comunique la contraseña inicial al usuario por un canal seguro y que el usuario la cambie desde su perfil en la primera sesión.
+ 
+**Recuperación de contraseña:**
+Se delega completamente a Supabase Auth nativo. Supabase provee un flujo de recuperación por email de forma automática — no requiere desarrollo adicional en ProntoTicket. El enlace de recuperación enviado por Supabase redirige a la URL configurada en Supabase Auth → URL Configuration → Redirect URLs.
+ 
+**Cierre de sesión:**
+Disponible desde el dropdown de usuario en el header (cualquier pantalla). Invalida la sesión en Supabase Auth y elimina la cookie JWT. Redirige a `/login`.
+ 
+### 11.3. Protección de Rutas por Rol
+ 
+La protección de rutas se implementa en dos niveles:
+ 
+**Nivel 1 — Middleware de Next.js (`middleware.js`):**
+Verifica que exista una sesión activa antes de permitir el acceso a cualquier ruta protegida. Si no hay sesión, redirige a `/login`. Este middleware se ejecuta en el Edge Runtime de Vercel, antes de que la página se renderice.
+ 
+**Nivel 2 — Verificación de rol en el componente de página:**
+Cada página protegida por rol (`/dashboard/metricas`, `/admin/*`) verifica adicionalmente que el rol del usuario autenticado tenga permiso para acceder. Si el rol no es suficiente, redirige a `/dashboard` con un toast de error informando que no tiene permisos.
+ 
+```
+Agente intenta acceder a /admin/usuarios
+  └─► Middleware: sesión activa ✅
+        └─► Página verifica rol: AGENTE ≠ ADMINISTRADOR ❌
+              └─► Redirige a /dashboard
+                    └─► Toast: "No tienes permisos para acceder a esa sección."
+```
+ 
+### 11.4. Layout Compartido
+ 
+Las rutas `/dashboard/*` y `/admin/*` comparten el layout principal (`layout.js`) que incluye el sidebar de navegación y el header. La ruta `/login` tiene su propio layout sin sidebar ni header, centrado en pantalla.
+ 
+```
+src/app/
+├── layout.js                    ← Layout raíz (fuentes, metadata global)
+├── login/
+│   ├── layout.js                ← Layout de login (sin sidebar, centrado)
+│   └── page.js
+└── (protected)/                 ← Grupo de rutas protegidas (convención Next.js)
+    ├── layout.js                ← Layout con sidebar + header (compartido)
+    ├── dashboard/
+    │   ├── page.js
+    │   └── tickets/[id]/page.js
+    ├── admin/
+    │   ├── usuarios/...
+    │   └── categorias/...
+    └── ...
+```
+ 
