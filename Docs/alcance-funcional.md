@@ -29,7 +29,78 @@ Este módulo es el punto de entrada del sistema y opera de forma **completamente
 - Antes de procesar cualquier dato, el sistema valida la firma HMAC de la petición para garantizar que el origen es SendGrid y no una fuente externa maliciosa. Si la validación falla, la petición se rechaza con `HTTP 403` sin procesar su contenido.
 - Si la validación es exitosa, el payload se pasa a la capa de servicios para iniciar el procesamiento.
  
-### 2.2. Detección de Hilo: ¿Ticket Nuevo o Respuesta Existente?
+### 2.2. Validación y Filtrado de Correos No Válidos
+ 
+Esta etapa ocurre **inmediatamente después** de la validación de firma y **antes** de cualquier otro procesamiento. Su propósito es descartar correos que no corresponden a solicitudes de soporte reales, evitando la creación de tickets basura en el sistema.
+ 
+El filtrado opera en **dos capas complementarias**: una automática provista por SendGrid y una propia implementada en `ticketService.js`.
+ 
+#### Capa 1 — Filtrado Automático por SendGrid
+ 
+Cuando la opción "Check incoming emails for spam" está activa en la configuración de Inbound Parse (ver `guia-instalacion.md` sección 3.2.2), SendGrid analiza cada correo entrante y adjunta al payload dos campos:
+ 
+| Campo del payload | Descripción |
+|---|---|
+| `spam_score` | Puntuación numérica de spam. Valores más altos indican mayor probabilidad de spam. El umbral de descarte configurado es **`5.0`**. |
+| `spam_report` | Detalle del análisis de spam (reglas activadas). Informativo, no se usa para tomar la decisión de descarte. |
+ 
+Si `spam_score >= 5.0`, el correo se descarta silenciosamente y el endpoint retorna `HTTP 200 OK` sin crear ningún ticket. SendGrid no reintenta el envío.
+ 
+> **Nota sobre el umbral:** El valor `5.0` es el umbral estándar de SpamAssassin, el motor de análisis de spam utilizado por SendGrid. Un score de 5.0 o más indica con alta fiabilidad que el correo es spam. Este valor es configurable en `ticketService.js` si en el futuro se necesita afinar la sensibilidad.
+ 
+#### Capa 2 — Filtrado por Headers de Correo (Lógica Propia)
+ 
+Los siguientes tipos de correos no son detectados como spam por SendGrid pero tampoco corresponden a solicitudes de soporte reales. Se identifican mediante headers estándar del protocolo de email que SendGrid incluye en el campo `headers` del payload.
+ 
+El sistema evalúa estas condiciones en orden, descartando el correo ante la primera coincidencia:
+ 
+| Tipo de correo | Header(s) evaluado(s) | Valor que activa el descarte |
+|---|---|---|
+| **Respuestas automáticas** (Out of Office, Fuera de oficina, Auto-reply) | `Auto-Submitted` | Cualquier valor distinto de `no` (ej: `auto-replied`, `auto-generated`) |
+| **Respuestas automáticas** (detección alternativa) | `X-Autoreply` | Presente con cualquier valor |
+| **Correos de rebote** (MAILER-DAEMON, Mail Delivery Failure) | `From` | Remitente que coincide con `MAILER-DAEMON@*`, `postmaster@*` o `noreply@*` |
+| **Boletines, newsletters y marketing** | `List-Unsubscribe` | Presente con cualquier valor (indica envío masivo con opción de baja) |
+| **Notificaciones de sistema** | `X-Mailer` | Valores que coincidan con patrones conocidos de herramientas automáticas (ej: `PHPMailer`, `Mailchimp`, `SendinBlue`, `HubSpot`) |
+| **Notificaciones de sistema** (detección alternativa) | `Precedence` | Valores `bulk`, `list` o `junk` |
+ 
+**Implementación en `ticketService.js`:**
+ 
+```javascript
+function isValidInboundEmail(headers, spamScore) {
+  // Capa 1: filtro de spam por score de SendGrid
+  if (parseFloat(spamScore) >= 5.0) return false;
+ 
+  // Capa 2: filtro por headers de protocolo de email
+  if (headers['auto-submitted'] && headers['auto-submitted'] !== 'no') return false;
+  if (headers['x-autoreply']) return false;
+  if (headers['list-unsubscribe']) return false;
+  if (['bulk', 'list', 'junk'].includes(headers['precedence'])) return false;
+ 
+  const from = headers['from'] || '';
+  if (/^(mailer-daemon|postmaster|noreply|no-reply)@/i.test(from)) return false;
+ 
+  return true;
+}
+```
+ 
+**Comportamiento ante correo descartado:**
+- El endpoint retorna `HTTP 200 OK` en todos los casos de descarte (independientemente del motivo), para evitar que SendGrid reintente el envío.
+- El descarte se registra en los logs del servidor con el motivo (ej: `[FILTRO] Correo descartado: Auto-Submitted header detectado. Remitente: vacation@cliente.cl`).
+- No se crea ningún ticket ni mensaje en la base de datos.
+- No se envía ninguna notificación al remitente.
+ 
+**Tabla resumen de todos los tipos de correo y su tratamiento:**
+ 
+| Tipo de correo | Ejemplo de remitente / asunto | Mecanismo de detección | Acción |
+|---|---|---|---|
+| Spam genérico | Ofertas, phishing, sorteos | `spam_score >= 5.0` (SendGrid) | Descartar |
+| Out of Office | "Estaré fuera hasta el lunes" | Header `Auto-Submitted: auto-replied` | Descartar |
+| Rebote de correo | `MAILER-DAEMON@servidor.com` | Remitente `mailer-daemon@*` | Descartar |
+| Newsletter / marketing | Boletín semanal, promoción | Header `List-Unsubscribe` presente | Descartar |
+| Notificación de sistema | Alerta de servidor, CI/CD | Header `Precedence: bulk` | Descartar |
+| Correo de soporte real | Cualquier cliente con un problema | Ninguno de los anteriores | Procesar → crear ticket |
+ 
+### 2.3. Detección de Hilo: ¿Ticket Nuevo o Respuesta Existente?
  
 Esta es la primera decisión lógica del sistema tras recibir un correo. El sistema debe determinar si el correo entrante es un nuevo caso de soporte o una respuesta del cliente a un ticket ya existente.
  
@@ -55,11 +126,11 @@ Como mecanismo de respaldo, el sistema también evalúa los headers `In-Reply-To
 | Se detecta `[#NNN]` en el asunto **pero** el ticket no existe | El sistema descarta la etiqueta y crea un nuevo ticket, tratando el correo como un caso nuevo. |
 | No se detecta `[#NNN]` y no hay match por headers | Se crea un nuevo ticket con el correo como mensaje inicial. |
  
-### 2.3. Deduplicación de Correos
+### 2.4. Deduplicación de Correos
  
 Antes de crear cualquier ticket o mensaje nuevo, el sistema verifica que el `Message-ID` del correo entrante no exista ya en la tabla `Message` (campo `message_id_header`). Si existe, el correo se descarta silenciosamente y el endpoint retorna `HTTP 200 OK` para evitar reintentos de SendGrid. Esto previene la creación de tickets o mensajes duplicados por reintentos del servidor de correo.
  
-### 2.4. Normalización de Contenido
+### 2.5. Normalización de Contenido
  
 Una vez identificado el correo como nuevo ticket o respuesta a uno existente, el sistema procesa su contenido:
  
@@ -67,7 +138,7 @@ Una vez identificado el correo como nuevo ticket o respuesta a uno existente, el
 - **Sanitización:** Se eliminan elementos HTML potencialmente problemáticos (scripts, iframes, estilos inline excesivos) antes de la conversión.
 - **Preservación del texto plano:** Si SendGrid también provee el cuerpo en texto plano (`text`), se usa como fallback en caso de que la conversión HTML → Markdown falle o produzca un resultado degradado.
  
-### 2.5. Gestión de Archivos Adjuntos
+### 2.6. Gestión de Archivos Adjuntos
  
 Si el correo entrante incluye archivos adjuntos (fotografías de máquinas con fallas, capturas de pantalla, comprobantes en PDF, etc.):
  
@@ -78,7 +149,7 @@ Si el correo entrante incluye archivos adjuntos (fotografías de máquinas con f
  
 **Tipos de archivo admitidos:** El sistema acepta cualquier tipo de archivo que SendGrid procese en el payload. No se implementa una lista de tipos permitidos en la versión inicial. Los agentes son responsables de evaluar la pertinencia de los adjuntos recibidos.
  
-### 2.6. Enriquecimiento Automático de Datos del Cliente
+### 2.7. Enriquecimiento Automático de Datos del Cliente
  
 Inmediatamente después de procesar el correo, el sistema realiza una consulta de solo lectura a la base de datos MySQL legacy de Prontomatic para enriquecer el ticket con los datos del cliente:
  

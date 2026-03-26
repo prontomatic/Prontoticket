@@ -280,14 +280,15 @@ Recibe y procesa los correos electrónicos entrantes dirigidos a `contacto@pront
  
 Al recibir el payload, el sistema ejecuta el siguiente flujo en orden:
  
-1. **Validación de firma HMAC** — Si falla, retorna `403` inmediatamente.
-2. **Verificación de spam** — Correos con `spam_score` elevado son descartados.
-3. **Deduplicación** — Se verifica que el `Message-ID` no exista en la tabla `Message`. Si existe, retorna `200 OK` sin procesar.
-4. **Detección de hilo** — Se evalúa el asunto (patrón `[#NNN]`) y los headers `In-Reply-To` / `References`.
-5. **Normalización** — Conversión del cuerpo HTML a Markdown.
-6. **Enriquecimiento** — Consulta a MySQL legacy por el email del remitente.
-7. **Creación del ticket o mensaje** — Según el resultado de la detección de hilo.
-8. **Procesamiento de adjuntos** — Subida a Supabase Storage y creación de registros en `Attachment`.
+1. **Validación de firma ECDSA** — Si falla, retorna `403` inmediatamente.
+2. **Filtrado por spam_score** — Si `spam_score >= 5.0` (umbral de SpamAssassin), el correo se descarta. Retorna `200 OK`.
+3. **Filtrado por headers de protocolo** — Se evalúan los headers `Auto-Submitted`, `X-Autoreply`, `List-Unsubscribe`, `Precedence` y el remitente. Si alguno indica un correo automático, de rebote, newsletter o notificación de sistema, el correo se descarta. Retorna `200 OK`. Ver `alcance-funcional.md` sección 2.2 para la tabla completa de tipos y headers evaluados.
+4. **Deduplicación** — Se verifica que el `Message-ID` no exista en la tabla `Message`. Si existe, retorna `200 OK` sin procesar.
+5. **Detección de hilo** — Se evalúa el asunto (patrón `[#NNN]`) y los headers `In-Reply-To` / `References`.
+6. **Normalización** — Conversión del cuerpo HTML a Markdown con `turndown`.
+7. **Enriquecimiento** — Consulta a MySQL legacy (`users`) por el email del remitente.
+8. **Creación del ticket o mensaje** — Según el resultado de la detección de hilo.
+9. **Procesamiento de adjuntos** — Validación de tipo MIME y tamaño, subida a Supabase Storage y creación de registros en `Attachment`.
  
 #### Respuestas
  
@@ -558,6 +559,56 @@ Permite al agente, supervisor o administrador cambiar manualmente el estado de u
 | `400 Bad Request` | `INVALID_PAYLOAD` | El valor de `status` no es un estado válido. |
 | `403 Forbidden` | `PERMISSION_DENIED` | Un agente intenta cambiar el estado de un ticket que no le está asignado. |
 | `404 Not Found` | `RESOURCE_NOT_FOUND` | El ticket no existe. |
+ 
+---
+ 
+### `GET /tickets/search`
+ 
+Permite buscar tickets por términos de texto libre a través de asunto, correo del cliente o número de ticket. Utilizado por la barra de búsqueda global del header del dashboard.
+ 
+**Autenticación:** JWT requerido. Roles permitidos: `AGENTE`, `SUPERVISOR`, `ADMINISTRADOR`.
+ 
+#### Parámetros de Consulta (Query Params)
+ 
+| Parámetro | Tipo | Requerido | Descripción |
+|---|---|---|---|
+| `q` | `String` | Sí | Término de búsqueda. Mínimo 2 caracteres. El sistema busca coincidencias parciales en los campos `subject`, `client_email` y el número de ticket (`id`). |
+ 
+#### Lógica de Búsqueda
+ 
+La búsqueda evalúa el término `q` contra los siguientes campos:
+ 
+| Campo buscado | Tipo de coincidencia | Ejemplo |
+|---|---|---|
+| `Ticket.id` | Coincidencia exacta si `q` es numérico | `q=142` encuentra el ticket `#142` |
+| `Ticket.subject` | Coincidencia parcial, insensible a mayúsculas (`ILIKE`) | `q=lavadora` encuentra tickets con "Lavadora" en el asunto |
+| `Ticket.client_email` | Coincidencia parcial, insensible a mayúsculas | `q=juan@` encuentra todos los tickets de ese cliente |
+ 
+Los resultados se filtran además por las mismas reglas de visibilidad de rol que aplican en `GET /tickets` (un agente solo ve sus propios tickets y los abiertos).
+ 
+#### Respuesta Exitosa — `200 OK`
+ 
+```json
+{
+  "data": [
+    {
+      "id": 142,
+      "subject": "Falla en máquina dispensadora piso 3",
+      "status": "EN_PROCESO_INTERNO",
+      "client_email": "juan@cliente.cl",
+      "created_at": "2025-03-15T10:30:00Z"
+    }
+  ],
+  "count": 1,
+  "query": "lavadora"
+}
+```
+ 
+#### Errores Específicos
+ 
+| Código | Error | Condición |
+|---|---|---|
+| `400 Bad Request` | `INVALID_PAYLOAD` | El parámetro `q` está ausente o tiene menos de 2 caracteres. |
  
 ---
  
@@ -1069,6 +1120,7 @@ Retorna el historial completo de cambios de estado de un ticket específico para
 |---|---|---|---|
 | `POST` | `/webhook/ingesta` | Recepción de correos desde SendGrid | Sistema (no JWT) |
 | `GET` | `/tickets` | Listado de tickets del dashboard | Agente, Supervisor, Admin |
+| `GET` | `/tickets/search` | Búsqueda de tickets por texto libre | Agente, Supervisor, Admin |
 | `GET` | `/tickets/[id]` | Detalle completo de un ticket | Agente*, Supervisor, Admin |
 | `PATCH` | `/tickets/[id]/toma` | Tomar un ticket del dashboard | Agente, Supervisor, Admin |
 | `PATCH` | `/tickets/[id]/estado` | Cambiar estado de un ticket | Agente*, Supervisor, Admin |

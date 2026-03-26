@@ -189,18 +189,18 @@ Prontomatic opera con una base de datos MySQL preexistente que contiene los dato
 **Proceso de enriquecimiento:**
  
 1. Al recibir un correo entrante, el sistema extrae la dirección de correo del remitente.
-2. Se ejecuta una consulta en la base de datos MySQL buscando un cliente cuyo correo electrónico coincida con el del remitente:
+2. Se ejecuta una consulta en la base de datos MySQL buscando el cliente cuyo `email` coincida con el del remitente:
  
 ```sql
 SELECT rut, telefono, direccion
-FROM clientes
+FROM users
 WHERE email = :email_remitente
 LIMIT 1;
 ```
  
-> **Nota:** Los nombres exactos de la tabla y columnas de la base de datos MySQL de Prontomatic deben ser confirmados y mapeados en el `schema.prisma` antes del desarrollo.
+> **Esquema confirmado:** La tabla se llama `users` y las columnas son exactamente `id`, `email`, `rut`, `telefono` y `direccion`. Estos nombres están verificados contra la base de datos MySQL real de Prontomatic y ya están mapeados en el `schema.prisma` del proyecto.
  
-3. **Si se encuentra el cliente:** Los valores de `rut`, `telefono` y `direccion` se almacenan en la entidad `Customer` de PostgreSQL, vinculados al ticket recién creado.
+3. **Si se encuentra el cliente:** Los valores de `rut`, `telefono` y `direccion` se almacenan en los campos correspondientes del ticket en PostgreSQL.
 4. **Si no se encuentra el cliente o faltan campos:** El sistema inserta avisos informativos directamente en el cuerpo del ticket para conocimiento del agente:
    - `"RUT no encontrado"`
    - `"Teléfono no encontrado"`

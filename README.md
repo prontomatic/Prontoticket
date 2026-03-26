@@ -28,7 +28,7 @@
 
 El sistema tiene como propósito centralizar, ordenar y hacer trazable toda la comunicación entre los clientes de Prontomatic y el equipo de soporte técnico, reemplazando el flujo actual basado en la gestión manual del buzón de correo electrónico de contacto.
 
-ProntoTicket utiliza el servicio de Inbound Parse Webhook de SendGrid. Este servicio intercepta los correos enviados a la casilla oficial, los procesa y envía un payload JSON a la API, permitiendo una conversión inmediata y automatizada de correos electrónicos en tickets de soporte estructurados.
+ProntoTicket opera a través del correo de contacto de Prontomatic mediante un servicio de webhook, en este caso SendGrid, que se encarga de recibir los correos y enviarlos al sistema.
 
 ---
 
@@ -120,8 +120,8 @@ Los siguientes aspectos quedan explícitamente **excluidos** del alcance de la v
 
 | Capa | Tecnología |
 |---|---|
-| Frontend | React |
-| Backend / Framework | Next.js |
+| Frontend & API | Next.js (App Router) |
+| Backend Runtime | Node.js |
 | Base de Datos | PostgreSQL (alojado en Supabase) |
 | ORM | Prisma |
 | Servicio de Webhook / Email | SendGrid (Inbound Parse) |
@@ -173,10 +173,14 @@ Cualquier mensaje recibido en este buzón es procesado automáticamente por el m
 │   ├── contexto-negocio.md        # Contexto de negocio y descripción de Prontomatic
 │   ├── arquitectura-proyecto.md   # Arquitectura general del proyecto
 │   ├── definicion-tecnica.md      # Arquitectura lógica y procesos técnicos
+│   ├── alcance-funcional.md       # Alcance funcional detallado por módulo
 │   ├── diagrama-de-flujo.md       # Descripción textual del flujo del sistema
 │   ├── modelo-de-datos.md         # Esquema de base de datos y entidades
 │   ├── especificacion-api.md      # Especificación de endpoints REST
-│   └── manual-agentes.md          # Manual de usuario para agentes
+│   ├── diseño-visual.md           # Sistema de diseño visual y UX
+│   ├── templates-emails.md        # Templates de los 4 correos automáticos
+│   ├── manual-agentes.md          # Manual de usuario para agentes
+│   └── guia-instalacion.md        # Guía de instalación, configuración y despliegue
 ├── src/                           # Código fuente de la aplicación
 └── ...
 ```
@@ -199,13 +203,14 @@ Cualquier mensaje recibido en este buzón es procesado automáticamente por el m
 Todos los documentos de referencia del proyecto se encuentran en la carpeta `/Docs`:
 
 - [`contexto-negocio.md`](./contexto-negocio.md) — Descripción detallada de Prontomatic, su modelo de negocio y el contexto operativo que da origen al proyecto.
-- [`arquitectura-proyecto.md`](./arquitectura-proyecto.md) — Arquitectura general del sistema, decisiones de diseño y visión técnica de alto nivel.
+- [`arquitectura-proyecto.md`](./arquitectura-proyecto.md) — Arquitectura general del sistema, decisiones de diseño, Vercel y flujo Git.
 - [`definicion-tecnica.md`](./definicion-tecnica.md) — Arquitectura lógica, stack tecnológico, flujos de ingesta, gestión y cierre de tickets.
+- [`alcance-funcional.md`](./alcance-funcional.md) — Alcance funcional detallado por módulo, requerimientos no funcionales y decisiones pendientes.
 - [`diagrama-de-flujo.md`](./diagrama-de-flujo.md) — Descripción textual paso a paso del flujo completo del sistema.
-- [`modelo-de-datos.md`](./modelo-de-datos.md) — Entidades, atributos, relaciones y esquema de la base de datos.
+- [`modelo-de-datos.md`](./modelo-de-datos.md) — Entidades, atributos, relaciones, schema Prisma completo y reglas de integridad.
 - [`especificacion-api.md`](./especificacion-api.md) — Endpoints REST disponibles, métodos, parámetros y respuestas.
+- [`diseño-visual.md`](./diseño-visual.md) — Sistema de diseño visual, paleta de colores, tipografía y especificación de componentes UI.
+- [`templates-emails.md`](./templates-emails.md) — Templates de los 4 correos automáticos del sistema con variables dinámicas y consideraciones técnicas.
 - [`manual-agentes.md`](./manual-agentes.md) — Guía de uso del sistema dirigida a los agentes de soporte.
+- [`guia-instalacion.md`](./guia-instalacion.md) — Guía de instalación, configuración de servicios externos y despliegue en Vercel.
 
----
-
-*Documento generado en fase de planificación. Sujeto a actualizaciones a medida que el proyecto evoluciona.*
