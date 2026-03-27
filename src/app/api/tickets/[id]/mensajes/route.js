@@ -29,7 +29,7 @@ export async function POST(request, { params }) {
 
   const ticket = await prisma.ticket.findUnique({
     where: { id: ticketId },
-    include: { messages: { orderBy: { created_at: 'asc' }, take: 1 } }
+    include: { messages: { orderBy: { sent_at: 'asc' }, take: 1 } }
   });
 
   if (!ticket) return NextResponse.json({ error: 'Not Found' }, { status: 404 });

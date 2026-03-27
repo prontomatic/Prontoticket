@@ -8,18 +8,31 @@ export async function PATCH(request, { params }) {
 
   const ticketId = parseInt(params.id, 10);
 
-  const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-  if (!ticket) return NextResponse.json({ error: 'Not Found' }, { status: 404 });
-  if (ticket.status === 'CERRADO') return NextResponse.json({ error: 'Ticket Closed' }, { status: 400 });
-  if (ticket.assigned_to) return NextResponse.json({ error: 'Already assigned' }, { status: 400 });
+// Primero verificar existencia básica del ticket
+const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+if (!ticket) return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+if (ticket.status === 'CERRADO') return NextResponse.json({ error: 'Ticket Closed' }, { status: 400 });
 
+// La verificación de assigned_to ocurre DENTRO de la transacción mediante
+// una condición atómica (where: assigned_to = null), eliminando la condición
+// de carrera entre agentes que intentan tomar el mismo ticket simultáneamente.
+try {
   await prisma.$transaction(async (tx) => {
-    await tx.ticket.update({
-      where: { id: ticketId },
+    // updateMany con condición: solo actualiza si assigned_to sigue siendo null
+    const result = await tx.ticket.updateMany({
+      where: {
+        id: ticketId,
+        assigned_to: null  // Condición atómica: solo toma si nadie lo tomó antes
+      },
       data: { assigned_to: user.id }
     });
-    
-    // Si estaba ABIERTO, pasa a EN_PROCESO_INTERNO automáticamente al tomarlo
+
+    // Si count = 0, otro agente tomó el ticket entre el findUnique y esta transacción
+    if (result.count === 0) {
+      throw new Error('ALREADY_ASSIGNED');
+    }
+
+    // Si estaba ABIERTO, transicionar a EN_PROCESO_INTERNO
     if (ticket.status === 'ABIERTO') {
       await tx.statusHistory.create({
         data: {
@@ -36,6 +49,15 @@ export async function PATCH(request, { params }) {
       });
     }
   });
+} catch (error) {
+  if (error.message === 'ALREADY_ASSIGNED') {
+    return NextResponse.json(
+      { error: 'ALREADY_ASSIGNED', message: 'El ticket ya fue tomado por otro agente.' },
+      { status: 409 }
+    );
+  }
+  throw error; // Re-lanzar errores no esperados
+}
 
   return NextResponse.json({ success: true });
 }

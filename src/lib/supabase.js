@@ -10,6 +10,6 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 // Cliente con Service Role Key: Bypasea RLS por diseño (Acceso Backend Only)
 export const supabase = createClient(
-  supabaseUrl || '',
-  supabaseServiceKey || ''
+  supabaseUrl || 'https://dummy.supabase.co',
+  supabaseServiceKey || 'dummy'
 );

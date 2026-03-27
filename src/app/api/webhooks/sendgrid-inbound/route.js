@@ -16,14 +16,33 @@ export async function POST(request) {
     const publicKey = process.env.SENDGRID_WEBHOOK_VERIFICATION_KEY;
     const signature = request.headers.get('x-twilio-email-event-webhook-signature');
     const timestamp = request.headers.get('x-twilio-email-event-webhook-timestamp');
-    
-    // Como es multipart/form-data (Inbound Parse), el payload se debe verificar según la documentación
-    // Sin embargo, si Inbound Parse no soporta ECDSA, o si está usando un token secreto:
-    // Aquí implementamos la lógica de verificación genérica.
-    // Asumiremos que SendGrid envía el signature en los headers configurados.
-    
-    // Para procesar multipart/form-data:
-    const formData = await request.formData();
+
+    // PASO 1: Rechazar inmediatamente si faltan los headers de seguridad
+    if (!signature || !timestamp) {
+      console.warn('[Webhook] Petición rechazada: headers de firma ausentes.');
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // PASO 2: Leer el raw body ANTES de parsear formData.
+    // La verificación ECDSA requiere los bytes exactos que SendGrid firmó.
+    // Una vez consumido el stream con formData(), ya no es posible obtener el raw body.
+    const rawBodyBuffer = await request.bytes();
+
+    // PASO 3: Verificar la firma ECDSA
+    if (publicKey) {
+      const isValid = verifySendGridSignature(publicKey, rawBodyBuffer, signature, timestamp);
+      if (!isValid) {
+        console.error('[Webhook] Firma ECDSA inválida. IP:', request.headers.get('x-forwarded-for'), '| Timestamp:', new Date().toISOString());
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
+    // PASO 4: Ahora sí es seguro parsear el formData usando los bytes ya leídos
+    const formData = await new Request(request.url, {
+      method: 'POST',
+      headers: request.headers,
+      body: rawBodyBuffer,
+    }).formData();
     
     // SendGrid Inbound Parse params: https://docs.sendgrid.com/for-developers/parsing-email/setting-up-the-inbound-parse-webhook
     const to = formData.get('to');
