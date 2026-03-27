@@ -17,7 +17,7 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
-    
+
     const { error } = await supabaseClient.auth.signInWithPassword({
       email,
       password
@@ -29,13 +29,13 @@ export default function LoginPage() {
       toast.success('Sesión iniciada correctamente');
       router.push('/dashboard');
     }
-    
+
     setLoading(false);
   };
 
   return (
     <main className="flex items-center justify-center flex-1 py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md shadow-lg border-t-4 border-t-orange-500">
+      <Card className="w-full max-w-md shadow-lg border-t-4 border-t-blue-800">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold tracking-tight text-center">
             ProntoTicket
@@ -50,9 +50,9 @@ export default function LoginPage() {
               <label className="text-sm font-medium leading-none" htmlFor="email">
                 Correo Electrónico
               </label>
-              <input 
-                id="email" 
-                type="email" 
+              <input
+                id="email"
+                type="email"
                 placeholder="agente@prontomatic.cl"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -64,9 +64,9 @@ export default function LoginPage() {
               <label className="text-sm font-medium leading-none" htmlFor="password">
                 Contraseña
               </label>
-              <input 
-                id="password" 
-                type="password" 
+              <input
+                id="password"
+                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -75,7 +75,7 @@ export default function LoginPage() {
             </div>
           </CardContent>
           <CardFooter>
-            <Button type="submit" className="w-full bg-orange-600 hover:bg-orange-700 text-white" disabled={loading}>
+            <Button type="submit" className="w-full bg-[#003F8A] hover:bg-[#002F6C] text-white" disabled={loading}>
               {loading ? 'Iniciando...' : 'Iniciar Sesión'}
             </Button>
           </CardFooter>
