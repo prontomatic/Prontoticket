@@ -1,29 +1,31 @@
-import { legacyPrisma } from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 
 /**
- * Consulta la base de datos MySQL legacy para enriquecer los datos del cliente.
- * 
+ * Consulta la tabla Customer local en Supabase para enriquecer los datos del cliente.
+ * Esta tabla es sincronizada desde NocoDB una vez al día por el cron job sync-customers.
+ *
  * @param {string} email - El correo del remitente original
- * @returns {object|null} - Datos encontrados (rut, telefono, direccion) o null
+ * @returns {object|null} - Datos encontrados (rut, phone, address) o null si no existe
  */
 export async function fetchLegacyCustomerData(email) {
   try {
-    const legacyUser = await legacyPrisma.legacyUser.findUnique({
+    const customer = await prisma.customer.findUnique({
       where: { email }
     });
 
-    if (!legacyUser) {
-      return null;
+    if (!customer) {
+      return null; // Cliente no encontrado en la tabla local
     }
 
     return {
-      rut: legacyUser.rut || null,
-      phone: legacyUser.telefono || null,
-      address: legacyUser.direccion || null
+      rut: customer.rut || null,
+      phone: customer.telefono || null,
+      address: customer.direccion || null
     };
+
   } catch (error) {
-    console.error('[IntegrationService] Error al consultar DB Legacy:', error);
-    // Para cumplir el Principio de Aislamiento: si falla MySQL, no detenemos el proceso, devolvemos null ("no encontrado")
+    console.error('[IntegrationService] Error al consultar tabla Customer en Supabase:', error);
+    // Principio de aislamiento: si falla la consulta, no bloqueamos la creación del ticket
     return { error: true };
   }
 }

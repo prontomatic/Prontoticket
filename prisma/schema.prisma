@@ -121,3 +121,13 @@ model StatusHistory {
   ticket           Ticket       @relation(fields: [ticket_id], references: [id])
   agent            Profile?     @relation("ChangedByAgent", fields: [changed_by], references: [id])
 }
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  rut       String?
+  telefono  String?
+  direccion String?
+  synced_at DateTime @default(now()) @updatedAt
+}
+
