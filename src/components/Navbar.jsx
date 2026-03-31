@@ -24,31 +24,72 @@ export default function Navbar() {
   if (!user) return null;
 
   return (
-    <nav className="bg-white/70 backdrop-blur-lg border-b border-gray-100 sticky top-0 z-50 shadow-sm transition-all duration-300">
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex items-center cursor-pointer hover:opacity-80 transition-opacity" onClick={() => router.push('/dashboard')}>
-            <div className="bg-orange-100 p-2 rounded-xl mr-3">
-              <Ticket className="h-6 w-6 text-orange-600" />
-            </div>
-            <span className="font-extrabold text-xl text-slate-800 tracking-tight">Pronto<span className="text-orange-600">Ticket</span></span>
+    <nav style={{
+      background: 'white',
+      borderBottom: '1px solid #E2E8F0',
+      position: 'sticky',
+      top: 0,
+      zIndex: 50,
+    }}>
+      <div style={{
+        maxWidth: '1600px',
+        margin: '0 auto',
+        padding: '0 2rem',
+        height: '56px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        {/* Logo */}
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+          onClick={() => router.push('/dashboard')}
+        >
+          <div style={{
+            background: '#003F8A',
+            padding: '7px',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <Ticket style={{ width: '18px', height: '18px', color: '#FFD700' }} />
           </div>
-          <div className="flex items-center space-x-2 sm:space-x-4">
-            <Button variant="ghost" size="icon" className="text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full">
-              <Bell className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full">
-              <Settings className="h-5 w-5" />
-            </Button>
-            <div className="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
-            <div className="text-sm font-medium text-slate-700 hidden sm:block">
-              {user.email}
-            </div>
-            <Button variant="outline" size="sm" onClick={handleLogout} className="border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 shadow-sm rounded-full px-4">
-              <LogOut className="h-4 w-4 mr-2" />
-              Salir
-            </Button>
-          </div>
+          <span style={{ fontWeight: '800', fontSize: '17px', color: '#1A1A2E', letterSpacing: '-0.3px' }}>
+            Pronto<span style={{ color: '#003F8A' }}>Ticket</span>
+          </span>
+        </div>
+
+        {/* Acciones */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Button variant="ghost" size="icon" style={{ borderRadius: '50%', color: '#64748B' }}>
+            <Bell style={{ width: '18px', height: '18px' }} />
+          </Button>
+          <Button variant="ghost" size="icon" style={{ borderRadius: '50%', color: '#64748B' }}>
+            <Settings style={{ width: '18px', height: '18px' }} />
+          </Button>
+          <div style={{ width: '1px', height: '20px', background: '#E2E8F0', margin: '0 4px' }} />
+          <span style={{ fontSize: '13px', color: '#475569', fontWeight: '500' }}>
+            {user.email}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            style={{
+              borderColor: '#E2E8F0',
+              color: '#475569',
+              borderRadius: '999px',
+              padding: '0 14px',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <LogOut style={{ width: '14px', height: '14px' }} />
+            Salir
+          </Button>
         </div>
       </div>
     </nav>
