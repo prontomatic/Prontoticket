@@ -25,12 +25,14 @@ export default function LoginPage() {
 
     if (error) {
       toast.error(error.message || 'Error al iniciar sesión');
+      setLoading(false);
     } else {
       toast.success('Sesión iniciada correctamente');
-      router.push('/dashboard');
+      // Pequeña pausa para que la cookie se establezca antes de redirigir
+      setTimeout(() => {
+        window.location.href = '/dashboard';
+      }, 500);
     }
-
-    setLoading(false);
   };
 
   return (
