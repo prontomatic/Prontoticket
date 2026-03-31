@@ -77,9 +77,9 @@ export default function LoginPage() {
           <Image
             src="/logo-prontomatic.png"
             alt="Logo Prontomatic"
-            width={100}
-            height={100}
-            style={{ borderRadius: '50%', objectFit: 'cover' }}
+            width={120}
+            height={120}
+            style={{ objectFit: 'contain' }}
             priority
           />
           <div style={{ textAlign: 'center' }}>
