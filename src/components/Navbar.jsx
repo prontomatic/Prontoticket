@@ -18,7 +18,7 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     await supabaseClient.auth.signOut();
-    router.push('/');
+    window.location.href = '/';
   };
 
   if (!user) return null;
@@ -43,7 +43,7 @@ export default function Navbar() {
         {/* Logo */}
         <div
           style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
-          onClick={() => router.push('/dashboard')}
+          onClick={() => window.location.href = '/dashboard'}
         >
           <div style={{
             background: '#003F8A',
