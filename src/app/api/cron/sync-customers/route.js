@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 export async function GET(request) {
   const authHeader = request.headers.get('authorization');
@@ -44,25 +45,27 @@ export async function GET(request) {
 
       if (validRecords.length > 0) {
         try {
-          // Paso 1: Insertar nuevos registros en bulk (sin transacción)
-          await prisma.customer.createMany({
-            data: validRecords,
-            skipDuplicates: true,
-          });
+          // Un único INSERT ... ON CONFLICT DO UPDATE para todo el lote
+          // Esto es 1000x más rápido que hacer upsert/updateMany individual
+          const now = new Date();
 
-          // Paso 2: Actualizar registros existentes en bulk usando raw SQL
-          // Más eficiente que updateMany individual y no requiere transacción larga
-          for (const v of validRecords) {
-            await prisma.customer.updateMany({
-              where: { email: v.email },
-              data: {
-                rut: v.rut,
-                telefono: v.telefono,
-                direccion: v.direccion,
-                synced_at: new Date(),
-              },
-            });
-          }
+          await prisma.$executeRaw`
+            INSERT INTO "Customer" (email, rut, telefono, direccion, synced_at)
+            SELECT
+              v.email,
+              v.rut,
+              v.telefono,
+              v.direccion,
+              ${now}::timestamp
+            FROM json_to_recordset(${JSON.stringify(validRecords)}::json)
+              AS v(email text, rut text, telefono text, direccion text)
+            ON CONFLICT (email)
+            DO UPDATE SET
+              rut = EXCLUDED.rut,
+              telefono = EXCLUDED.telefono,
+              direccion = EXCLUDED.direccion,
+              synced_at = EXCLUDED.synced_at
+          `;
 
           results.synced += validRecords.length;
           console.log(`[SyncCustomers] Lote offset ${offset}: ${validRecords.length} registros procesados.`);
