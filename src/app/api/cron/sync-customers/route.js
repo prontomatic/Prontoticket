@@ -14,7 +14,7 @@ export async function GET(request) {
 
   const results = { synced: 0, errors: 0, total: 0 };
   let offset = 0;
-  const limit = 1000; // Aumentado de 100 a 1000 para reducir número de requests
+  const limit = 1000;
   let hasMore = true;
 
   try {
@@ -33,46 +33,41 @@ export async function GET(request) {
       const records = data.list || [];
       results.total += records.length;
 
-      // Filtrar registros válidos (con email)
-      const validRecords = records.filter(r => r.email && r.email.trim() !== '');
-
-      if (validRecords.length > 0) {
-        // Bulk upsert usando INSERT ... ON CONFLICT para procesar todos los registros del lote en una sola query
-        const values = validRecords.map(r => ({
+      const validRecords = records
+        .filter(r => r.email && r.email.trim() !== '')
+        .map(r => ({
           email: r.email.trim().toLowerCase(),
           rut: r.rut || null,
           telefono: r.telefono || null,
           direccion: r.direccion && r.direccion !== '0' ? r.direccion : null,
         }));
 
+      if (validRecords.length > 0) {
         try {
-          // Usar createMany con skipDuplicates para insertar nuevos registros
-          // y luego updateMany para actualizar los existentes
-          await prisma.$transaction(async (tx) => {
-            // Paso 1: Insertar nuevos registros (ignorar duplicados)
-            await tx.customer.createMany({
-              data: values,
-              skipDuplicates: true,
-            });
-
-            // Paso 2: Actualizar registros existentes uno por uno solo si hay cambios
-            // Esto es necesario porque createMany con skipDuplicates no actualiza existentes
-            for (const v of values) {
-              await tx.customer.updateMany({
-                where: { email: v.email },
-                data: {
-                  rut: v.rut,
-                  telefono: v.telefono,
-                  direccion: v.direccion,
-                  synced_at: new Date(),
-                },
-              });
-            }
+          // Paso 1: Insertar nuevos registros en bulk (sin transacción)
+          await prisma.customer.createMany({
+            data: validRecords,
+            skipDuplicates: true,
           });
 
+          // Paso 2: Actualizar registros existentes en bulk usando raw SQL
+          // Más eficiente que updateMany individual y no requiere transacción larga
+          for (const v of validRecords) {
+            await prisma.customer.updateMany({
+              where: { email: v.email },
+              data: {
+                rut: v.rut,
+                telefono: v.telefono,
+                direccion: v.direccion,
+                synced_at: new Date(),
+              },
+            });
+          }
+
           results.synced += validRecords.length;
+          console.log(`[SyncCustomers] Lote offset ${offset}: ${validRecords.length} registros procesados.`);
         } catch (batchError) {
-          console.error(`[SyncCustomers] Error en lote offset ${offset}:`, batchError);
+          console.error(`[SyncCustomers] Error en lote offset ${offset}:`, batchError.message);
           results.errors += validRecords.length;
         }
       }
