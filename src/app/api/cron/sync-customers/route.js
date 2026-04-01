@@ -34,14 +34,19 @@ export async function GET(request) {
       const records = data.list || [];
       results.total += records.length;
 
-      const validRecords = records
+      const seen = new Map();
+      records
         .filter(r => r.email && r.email.trim() !== '')
-        .map(r => ({
-          email: r.email.trim().toLowerCase(),
-          rut: r.rut || null,
-          telefono: r.telefono || null,
-          direccion: r.direccion && r.direccion !== '0' ? r.direccion : null,
-        }));
+        .forEach(r => {
+          const email = r.email.trim().toLowerCase();
+          seen.set(email, {
+            email,
+            rut: r.rut || null,
+            telefono: r.telefono || null,
+            direccion: r.direccion && r.direccion !== '0' ? r.direccion : null,
+          });
+        });
+      const validRecords = Array.from(seen.values());
 
       if (validRecords.length > 0) {
         try {
