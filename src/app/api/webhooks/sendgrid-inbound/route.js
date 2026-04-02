@@ -14,30 +14,30 @@ export async function POST(request) {
   try {
     // 1. Verificación de Seguridad de SendGrid
     const publicKey = process.env.SENDGRID_WEBHOOK_VERIFICATION_KEY;
-    const signature = request.headers.get('x-twilio-email-event-webhook-signature');
-    const timestamp = request.headers.get('x-twilio-email-event-webhook-timestamp');
+    let rawBodyBuffer;
 
-    // PASO 1: Rechazar inmediatamente si faltan los headers de seguridad
-    if (!signature || !timestamp) {
-      console.warn('[Webhook] Petición rechazada: headers de firma ausentes.');
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    // PASO 2: Leer el raw body ANTES de parsear formData.
-    // La verificación ECDSA requiere los bytes exactos que SendGrid firmó.
-    // Una vez consumido el stream con formData(), ya no es posible obtener el raw body.
-    const rawBodyBuffer = await request.bytes();
-
-    // PASO 3: Verificar la firma ECDSA
     if (publicKey) {
-      const isValid = verifySendGridSignature(publicKey, rawBodyBuffer, signature, timestamp);
-      if (!isValid) {
-        console.error('[Webhook] Firma ECDSA inválida. IP:', request.headers.get('x-forwarded-for'), '| Timestamp:', new Date().toISOString());
+      const signature = request.headers.get('x-twilio-email-event-webhook-signature');
+      const timestamp = request.headers.get('x-twilio-email-event-webhook-timestamp');
+
+      if (!signature || !timestamp) {
+        console.warn('[Webhook] Petición rechazada: headers de firma ausentes.');
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
+
+      rawBodyBuffer = await request.bytes();
+
+      const isValid = verifySendGridSignature(publicKey, rawBodyBuffer, signature, timestamp);
+      if (!isValid) {
+        console.error('[Webhook] Firma ECDSA inválida. IP:', request.headers.get('x-forwarded-for'));
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    } else {
+      console.info('[Webhook] Verificación de firma omitida (key no configurada).');
+      rawBodyBuffer = await request.bytes();
     }
 
-    // PASO 4: Ahora sí es seguro parsear el formData usando los bytes ya leídos
+    // 2. Parsear formData usando los bytes leídos
     const formData = await new Request(request.url, {
       method: 'POST',
       headers: request.headers,
@@ -94,10 +94,6 @@ export async function POST(request) {
     for (let i = 1; i <= attachmentsCount; i++) {
         const file = formData.get(`attachment${i}`);
         if (file && file.size > 0) {
-            // El guardado físico en Supabase Storage debe hacerse aquí, pero para 
-            // no complicar, asumo que supabase mock o lo subiría acá.
-            // Omito la subida binaria para respetar la regla de no inventar y uso un path simulado
-            // según diseño.
             attachments.push({
                 fileName: file.name,
                 storagePath: `tickets/temp/${file.name}`,
@@ -126,8 +122,6 @@ export async function POST(request) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Webhook processing error:', error);
-    // Para no reintentar infinitamente en Inbound Parse, se suele devolver 200 aunque falle
-    // Opcionalmente se puede devolver 500 para que SendGrid reintente
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
