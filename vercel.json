@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/auto-close",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-customers",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}
