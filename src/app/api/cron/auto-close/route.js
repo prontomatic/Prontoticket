@@ -10,23 +10,28 @@ export async function GET(request) {
   }
 
   const now = new Date();
-  
+
   // Buscar tickets en estado "Esperando Cliente"
   const ticketsWaiting = await prisma.ticket.findMany({
-    where: { status: 'EN_ESPERA_CLIENTE' }
+    where: { status: 'EN_ESPERA_CLIENTE' },
+    include: {
+      status_history: {
+        where: { new_status: 'EN_ESPERA_CLIENTE' },
+        orderBy: { changed_at: 'desc' },
+        take: 1
+      }
+    }
   });
 
   const results = { closed: 0, warned: 0, errors: [] };
 
   for (const ticket of ticketsWaiting) {
-    // Si no hay respuesta de cliente, se evalúa respecto a la fecha de creación o el último cambio a este estado
-    // Prontomatic rule: 48h since the agent replied (which triggers EN_ESPERA_CLIENTE).
-    // The ticketService sets updated_at. Let's use updated_at since the status changed.
-    // Usar last_client_reply_at: campo diseñado específicamente para medir
-    // inactividad del cliente. updated_at se reinicia con cualquier cambio del ticket.
-    const referenceDate = ticket.last_client_reply_at
-      ? new Date(ticket.last_client_reply_at)
-      : new Date(ticket.created_at);
+    // La referencia es cuándo el ticket entró en EN_ESPERA_CLIENTE (última transición a ese estado).
+    // Fallback a updated_at si por alguna razón no hay registro en StatusHistory.
+    const lastTransition = ticket.status_history[0];
+    const referenceDate = lastTransition
+      ? new Date(lastTransition.changed_at)
+      : new Date(ticket.updated_at);
     const diffHours = (now - referenceDate) / (1000 * 60 * 60);
 
     try {
@@ -41,14 +46,14 @@ export async function GET(request) {
             }
           });
           return await tx.ticket.update({
-             where: { id: ticket.id },
-             data: { status: 'CERRADO', closed_at: now }
+            where: { id: ticket.id },
+            data: { status: 'CERRADO', closed_at: now }
           });
         });
-        
+
         // Enviar notificación de cierre automático
         await sendCierre48h(updated);
-        // Enviar encuesta CSAT — debe dispararse en todo cierre de ticket
+        // Enviar encuesta CSAT
         try {
           await sendCsat(updated);
         } catch (csatError) {
@@ -56,11 +61,11 @@ export async function GET(request) {
         }
         results.closed++;
       } else if (diffHours >= 24 && diffHours < 25) {
-         // Aviso preventivo a las 24 hrs. (asumiendo que cron corre cada 1h)
-         await sendAviso24h(ticket);
-         results.warned++;
+        // Aviso preventivo a las 24 hrs (asumiendo que cron corre cada 1h)
+        await sendAviso24h(ticket);
+        results.warned++;
       }
-    } catch(err) {
+    } catch (err) {
       console.error(`Error procesando ticket #${ticket.id} en Cron:`, err);
       results.errors.push({ id: ticket.id, error: err.message });
     }

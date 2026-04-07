@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authenticateUser } from '@/services/authService';
-import { createSupabaseServerClient } from '@/lib/supabase-server';
+import { createSupabaseAdminClient } from '@/lib/supabase-server';
 import { prisma } from '@/lib/prisma';
 
 // GET — Listar todos los usuarios
@@ -30,7 +30,7 @@ export async function POST(request) {
 
   try {
     // Crear usuario en Supabase Auth usando service role
-    const supabase = await createSupabaseServerClient();
+    const supabase = createSupabaseAdminClient();
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
