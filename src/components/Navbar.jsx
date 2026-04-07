@@ -4,15 +4,25 @@ import { useState, useEffect } from 'react';
 import { supabaseClient } from '@/lib/supabase-client';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { LogOut, Ticket, Bell, Settings } from 'lucide-react';
+import { LogOut, Ticket, Bell, Settings, Settings2 } from 'lucide-react';
 
 export default function Navbar() {
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
-    supabaseClient.auth.getUser().then(({ data }) => {
+    supabaseClient.auth.getUser().then(async ({ data }) => {
       setUser(data?.user || null);
+      if (data?.user) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+          const res = await fetch('/api/profile', {
+            headers: { 'Authorization': `Bearer ${session.access_token}` }
+          });
+          if (res.ok) setProfile(await res.json());
+        }
+      }
     });
   }, []);
 
@@ -68,6 +78,25 @@ export default function Navbar() {
           <Button variant="ghost" size="icon" style={{ borderRadius: '50%', color: '#64748B' }}>
             <Settings style={{ width: '18px', height: '18px' }} />
           </Button>
+
+          {/* Menú admin — solo visible para ADMINISTRADOR */}
+          {user && profile?.role === 'ADMINISTRADOR' && (
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <button
+                onClick={() => router.push('/admin/usuarios')}
+                style={{ background: 'none', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', color: '#475569', fontWeight: '500' }}
+              >
+                Usuarios
+              </button>
+              <button
+                onClick={() => router.push('/admin/categorias')}
+                style={{ background: 'none', border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', color: '#475569', fontWeight: '500' }}
+              >
+                Categorías
+              </button>
+            </div>
+          )}
+
           <div style={{ width: '1px', height: '20px', background: '#E2E8F0', margin: '0 4px' }} />
           <span style={{ fontSize: '13px', color: '#475569', fontWeight: '500' }}>
             {user.email}

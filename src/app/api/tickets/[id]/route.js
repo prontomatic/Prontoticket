@@ -16,7 +16,7 @@ export async function GET(request, { params }) {
         agent: { select: { full_name: true } },
         messages: {
           include: { attachments: true, author: { select: { full_name: true } } },
-          orderBy: { created_at: 'asc' }
+          orderBy: { sent_at: 'asc' }
         },
         status_history: {
           include: { agent: { select: { full_name: true } } },
