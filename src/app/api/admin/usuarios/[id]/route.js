@@ -3,12 +3,13 @@ import { authenticateUser } from '@/services/authService';
 import { prisma } from '@/lib/prisma';
 
 // PATCH — Editar usuario (rol, nombre, estado activo)
-export async function PATCH(request, { params }) {
+export async function PATCH(request, context) {
   const user = await authenticateUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (user.profile.role !== 'ADMINISTRADOR') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const targetId = params.id;
+  const { id } = await context.params;
+  const targetId = id;
   const body = await request.json();
 
   const allowedFields = {};

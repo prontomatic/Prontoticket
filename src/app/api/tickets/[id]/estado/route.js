@@ -8,11 +8,12 @@ const bodySchema = z.object({
   status: z.enum(['EN_PROCESO_INTERNO', 'EN_ESPERA_CLIENTE', 'CERRADO'])
 });
 
-export async function PATCH(request, { params }) {
+export async function PATCH(request, context) {
   const user = await authenticateUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const ticketId = parseInt(params.id, 10);
+  const { id } = await context.params;
+  const ticketId = parseInt(id, 10);
   let json;
   try { json = await request.json(); } catch(e) { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 

@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import { authenticateUser } from '@/services/authService';
 import { prisma } from '@/lib/prisma';
 
-export async function PATCH(request, { params }) {
+export async function PATCH(request, context) {
   const user = await authenticateUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const ticketId = parseInt(params.id, 10);
+  const { id } = await context.params;
+  const ticketId = parseInt(id, 10);
 
 // Primero verificar existencia básica del ticket
 const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
