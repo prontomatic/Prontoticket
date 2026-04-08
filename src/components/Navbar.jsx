@@ -39,6 +39,8 @@ export default function Navbar() {
   }, []);
 
   const handleLogout = async () => {
+    const confirmed = window.confirm('¿Estás seguro de que quieres salir del sistema?');
+    if (!confirmed) return;
     await supabaseClient.auth.signOut();
     window.location.href = '/';
   };
