@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabaseClient } from '@/lib/supabase-client';
 import { toast } from 'sonner';
 import Image from 'next/image';
-import { Lock, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 
 export default function ActualizarPasswordPage() {
   const [password, setPassword] = useState('');
@@ -12,17 +12,17 @@ export default function ActualizarPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    // Supabase maneja automáticamente el token del URL hash al inicializar.
-    // Necesitamos esperar a que la sesión se establezca desde el enlace de recovery.
-    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
+    const checkSession = async () => {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) {
         setSessionReady(true);
       }
-    });
-
-    return () => subscription.unsubscribe();
+      setChecking(false);
+    };
+    checkSession();
   }, []);
 
   const handleSubmit = async (e) => {
@@ -44,6 +44,8 @@ export default function ActualizarPasswordPage() {
     } else {
       setSuccess(true);
       toast.success('Contraseña actualizada exitosamente');
+      // Cerrar sesión para que el usuario ingrese con su nueva contraseña
+      await supabaseClient.auth.signOut();
     }
     setLoading(false);
   };
@@ -92,7 +94,7 @@ export default function ActualizarPasswordPage() {
             <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#003F8A', margin: '0 0 4px' }}>
               {success ? 'Contraseña Actualizada' : 'Nueva Contraseña'}
             </h1>
-            {!success && (
+            {!success && !checking && sessionReady && (
               <p style={{ fontSize: '13px', color: '#64748B', margin: 0 }}>
                 Ingresa tu nueva contraseña
               </p>
@@ -127,7 +129,7 @@ export default function ActualizarPasswordPage() {
               Ir a Iniciar Sesión
             </button>
           </div>
-        ) : !sessionReady ? (
+        ) : checking ? (
           <div style={{ textAlign: 'center', padding: '2rem 0' }}>
             <div style={{
               width: '48px', height: '48px', borderRadius: '50%',
@@ -139,6 +141,27 @@ export default function ActualizarPasswordPage() {
             <p style={{ fontSize: '14px', color: '#64748B', margin: 0 }}>
               Verificando enlace de recuperación...
             </p>
+          </div>
+        ) : !sessionReady ? (
+          <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+            <p style={{ fontSize: '14px', color: '#DC2626', fontWeight: '600', margin: '0 0 8px' }}>
+              Enlace inválido o expirado
+            </p>
+            <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 1.5rem', lineHeight: '1.5' }}>
+              El enlace de recuperación ya fue utilizado o ha expirado. Solicita uno nuevo desde la página de inicio de sesión.
+            </p>
+            <button
+              onClick={() => window.location.href = '/recuperar-password'}
+              style={{
+                width: '100%', height: '46px',
+                background: '#003F8A', color: 'white',
+                border: 'none', borderRadius: '10px',
+                fontSize: '15px', fontWeight: '600',
+                cursor: 'pointer', fontFamily: 'inherit'
+              }}
+            >
+              Solicitar nuevo enlace
+            </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
