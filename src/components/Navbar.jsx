@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabaseClient } from '@/lib/supabase-client';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { LogOut, Ticket, Bell, Settings, User, BarChart3, Users, Tag } from 'lucide-react';
+import { LogOut, Ticket, Bell, Settings, User, BarChart3, Users, Tag, Mail } from 'lucide-react';
 
 export default function Navbar() {
   const [user, setUser] = useState(null);
@@ -60,6 +60,7 @@ export default function Navbar() {
     { label: 'Usuarios', icon: Users, path: '/admin/usuarios', roles: ['ADMINISTRADOR'], group: 'admin' },
     { label: 'Categorías', icon: Tag, path: '/admin/categorias', roles: ['ADMINISTRADOR'], group: 'admin' },
     { label: 'Configuración', icon: Settings, path: '/admin/configuracion', roles: ['ADMINISTRADOR'], group: 'admin' },
+    { label: 'Plantillas de Correo', icon: Mail, path: '/admin/plantillas', roles: ['ADMINISTRADOR'], group: 'admin' },
   ];
 
   const visibleItems = role ? allMenuItems.filter(item => item.roles.includes(role)) : [];
