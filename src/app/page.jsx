@@ -174,9 +174,28 @@ export default function LoginPage() {
           </button>
         </form>
 
+        <button
+          type="button"
+          onClick={() => window.location.href = '/recuperar-password'}
+          style={{
+            display: 'block',
+            margin: '1rem auto 0',
+            background: 'none',
+            border: 'none',
+            color: '#003F8A',
+            fontSize: '13px',
+            fontWeight: '500',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            textUnderlineOffset: '2px',
+          }}
+        >
+          ¿Olvidaste tu contraseña?
+        </button>
+
         <p style={{
           textAlign: 'center', fontSize: '12px',
-          color: '#94A3B8', marginTop: '1.25rem', marginBottom: 0
+          color: '#94A3B8', marginTop: '1rem', marginBottom: 0
         }}>
           Acceso exclusivo para personal de Prontomatic
         </p>
