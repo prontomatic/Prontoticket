@@ -131,7 +131,7 @@ export default function TicketDetailPage({ params }) {
     } catch (e) { toast.error('Error de red'); }
   };
 
-  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600" /></div>;
+  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#003F8A]" /></div>;
   if (!ticket) return <div className="min-h-screen bg-slate-50 flex p-8">No encontrado</div>;
 
   const userRole = session?.user?.user_metadata?.role || 'AGENTE';
@@ -146,12 +146,12 @@ export default function TicketDetailPage({ params }) {
         
         {/* Lado Izquierdo - Conversación */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center text-slate-500 hover:text-orange-600 transition-colors cursor-pointer w-fit mb-4" onClick={() => router.push('/dashboard')}>
+          <div className="flex items-center text-slate-500 hover:text-[#003F8A] transition-colors cursor-pointer w-fit mb-4" onClick={() => router.push('/dashboard')}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Volver al Tablero
           </div>
           
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 relative overflow-hidden">
-             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-400 to-orange-600"></div>
+             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#003F8A] to-[#002F6C]"></div>
              <div className="flex justify-between items-start mb-4">
                <div>
                   <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-tight">
@@ -172,7 +172,7 @@ export default function TicketDetailPage({ params }) {
                 <div key={msg.id} className={`flex w-full ${isAgent ? 'justify-end' : 'justify-start'}`}>
                   <div className={`flex w-full max-w-[85%] ${isAgent ? 'flex-row-reverse' : 'flex-row'}`}>
                      <Avatar className="w-10 h-10 border-2 border-white shadow-sm shrink-0">
-                        <AvatarFallback className={`text-white font-bold ${isAgent ? 'bg-orange-500' : 'bg-slate-400'}`}>
+                        <AvatarFallback className={`text-white font-bold ${isAgent ? 'bg-[#003F8A]' : 'bg-slate-400'}`}>
                           {isAgent ? (msg.author?.full_name?.charAt(0) || 'A') : ticket.client_email.charAt(0).toUpperCase()}
                         </AvatarFallback>
                      </Avatar>
@@ -185,7 +185,7 @@ export default function TicketDetailPage({ params }) {
                              {format(new Date(msg.sent_at), "HH:mm • dd MMM", { locale: es })}
                           </span>
                         </div>
-                        <div className={`p-4 rounded-2xl shadow-sm text-sm whitespace-pre-wrap ${isAgent ? 'bg-orange-600 text-white rounded-tr-none' : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'}`}>
+                        <div className={`p-4 rounded-2xl shadow-sm text-sm whitespace-pre-wrap ${isAgent ? 'bg-[#003F8A] text-white rounded-tr-none' : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'}`}>
                            {msg.body}
                         </div>
                         {msg.attachments && msg.attachments.length > 0 && (
@@ -209,16 +209,16 @@ export default function TicketDetailPage({ params }) {
           {/* Caja de Respuesta */}
           {ticket.status !== 'CERRADO' ? (
              canRespond ? (
-                <Card className="border-orange-200 shadow-md bg-white overflow-hidden rounded-2xl">
-                  <div className="p-4 border-b border-orange-100 bg-orange-50/50 flex justify-between items-center">
+                <Card className="border-blue-200 shadow-md bg-white overflow-hidden rounded-2xl">
+                  <div className="p-4 border-b border-blue-100 bg-blue-50/50 flex justify-between items-center">
                     <h3 className="font-semibold text-slate-800 flex items-center">
-                       <Send className="w-4 h-4 mr-2 text-orange-600" />
+                       <Send className="w-4 h-4 mr-2 text-[#003F8A]" />
                        Responder al Cliente
                     </h3>
                     <div className="flex items-center space-x-2">
                       <span className="text-xs text-slate-500 font-medium">Acción post-envío:</span>
                       <Select value={nuevoEstado} onValueChange={setNuevoEstado}>
-                        <SelectTrigger className="w-[180px] h-8 text-xs bg-white border-orange-200 focus:ring-orange-500 rounded-lg">
+                        <SelectTrigger className="w-[180px] h-8 text-xs bg-white border-blue-200 focus:ring-[#003F8A] rounded-lg">
                           <SelectValue placeholder="Estado post-envío" />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl border-slate-200">
@@ -238,7 +238,7 @@ export default function TicketDetailPage({ params }) {
                     />
                   </div>
                   <div className="p-3 bg-slate-50 border-t border-slate-100 flex justify-end">
-                    <Button onClick={handleResponder} disabled={submitting} className="bg-orange-600 hover:bg-orange-700 text-white rounded-full px-6 shadow-md shadow-orange-600/20">
+                    <Button onClick={handleResponder} disabled={submitting} className="bg-orange-600 hover:bg-[#002F6C] text-white rounded-full px-6 shadow-md shadow-blue-600/20">
                       {submitting ? 'Enviando...' : 'Enviar Respuesta'}
                     </Button>
                   </div>
@@ -334,7 +334,7 @@ export default function TicketDetailPage({ params }) {
                    {ticket.agent ? (
                      <div className="flex items-center">
                         <Avatar className="w-6 h-6 mr-2">
-                           <AvatarFallback className="bg-orange-100 text-orange-700 text-xs font-bold">{ticket.agent.full_name.charAt(0)}</AvatarFallback>
+                           <AvatarFallback className="bg-[#E8F0FB] text-[#003F8A] text-xs font-bold">{ticket.agent.full_name.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <span className="font-medium text-slate-800">{ticket.agent.full_name}</span>
                      </div>

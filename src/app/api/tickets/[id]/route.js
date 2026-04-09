@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import { authenticateUser } from '@/services/authService';
 import { prisma } from '@/lib/prisma';
 
-export async function GET(request, { params }) {
+export async function GET(request, context) {
   const user = await authenticateUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const ticketId = parseInt(params.id, 10);
+  const { id } = await context.params;
+  const ticketId = parseInt(id, 10);
 
   try {
     const ticket = await prisma.ticket.findUnique({
@@ -16,7 +17,7 @@ export async function GET(request, { params }) {
         agent: { select: { full_name: true } },
         messages: {
           include: { attachments: true, author: { select: { full_name: true } } },
-          orderBy: { created_at: 'asc' }
+          orderBy: { sent_at: 'asc' }
         },
         status_history: {
           include: { agent: { select: { full_name: true } } },
