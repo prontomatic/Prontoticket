@@ -5,7 +5,7 @@ import { supabaseClient } from '@/lib/supabase-client';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import { toast } from 'sonner';
-import { UserPlus, Pencil, ToggleLeft, ToggleRight, Shield, User, Eye } from 'lucide-react';
+import { UserPlus, Pencil, ToggleLeft, ToggleRight, Shield, User, Eye, KeyRound } from 'lucide-react';
 
 const ROLES = ['AGENTE', 'SUPERVISOR', 'ADMINISTRADOR'];
 
@@ -23,6 +23,7 @@ export default function AdminUsuariosPage() {
   const [editingUser, setEditingUser] = useState(null);
   const [form, setForm] = useState({ email: '', full_name: '', role: 'AGENTE', password: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [tempPasswordData, setTempPasswordData] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -88,6 +89,25 @@ export default function AdminUsuariosPage() {
         await fetchUsers(session.access_token);
       }
     } catch (e) { toast.error('Error al cambiar estado'); }
+  };
+
+  const handleResetPassword = async (targetUser) => {
+    const confirmed = window.confirm(`¿Estás seguro de restablecer la contraseña de ${targetUser.full_name} (${targetUser.email})?`);
+    if (!confirmed) return;
+    try {
+      const res = await fetch(`/api/admin/usuarios/${targetUser.id}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session.access_token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTempPasswordData({ email: targetUser.email, name: targetUser.full_name, password: data.tempPassword });
+        toast.success('Contraseña restablecida exitosamente');
+      } else {
+        const d = await res.json();
+        toast.error(d.error || 'Error al restablecer contraseña');
+      }
+    } catch (e) { toast.error('Error de red'); }
   };
 
   const handleEdit = (user) => {
@@ -224,6 +244,9 @@ export default function AdminUsuariosPage() {
                           {user.is_active ? <ToggleLeft style={{ width: '12px', height: '12px' }} /> : <ToggleRight style={{ width: '12px', height: '12px' }} />}
                           {user.is_active ? 'Desactivar' : 'Activar'}
                         </button>
+                        <button onClick={() => handleResetPassword(user)} style={{ background: '#FEF3C7', border: 'none', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: '500', color: '#92400E', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <KeyRound style={{ width: '12px', height: '12px' }} /> Contraseña
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -232,6 +255,69 @@ export default function AdminUsuariosPage() {
             </table>
           )}
         </div>
+        {/* Diálogo de contraseña temporal */}
+        {tempPasswordData && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.5)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', zIndex: 100
+          }}
+          onClick={() => setTempPasswordData(null)}
+          >
+            <div
+              style={{
+                background: 'white', borderRadius: '16px',
+                padding: '2rem', maxWidth: '440px', width: '90%',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <KeyRound style={{ width: '20px', height: '20px', color: '#92400E' }} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#1A1A2E', margin: 0 }}>Contraseña Restablecida</h3>
+                  <p style={{ fontSize: '13px', color: '#64748B', margin: 0 }}>{tempPasswordData.name}</p>
+                </div>
+              </div>
+
+              <div style={{
+                background: '#FFFBEB', border: '1px solid #FDE68A',
+                borderRadius: '10px', padding: '1rem', marginBottom: '1rem'
+              }}>
+                <p style={{ fontSize: '12px', color: '#92400E', fontWeight: '600', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Contraseña Temporal
+                </p>
+                <p style={{ fontSize: '20px', fontWeight: '700', color: '#1A1A2E', margin: 0, letterSpacing: '1px', fontFamily: 'monospace' }}>
+                  {tempPasswordData.password}
+                </p>
+              </div>
+
+              <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 1rem', lineHeight: '1.5' }}>
+                Comunica esta contraseña temporal a <strong>{tempPasswordData.email}</strong>. El usuario deberá iniciar sesión con esta contraseña.
+              </p>
+
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(tempPasswordData.password);
+                    toast.success('Contraseña copiada al portapapeles');
+                  }}
+                  style={{ background: '#F1F5F9', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', color: '#475569' }}
+                >
+                  Copiar
+                </button>
+                <button
+                  onClick={() => setTempPasswordData(null)}
+                  style={{ background: '#003F8A', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
