@@ -131,3 +131,9 @@ model Customer {
   synced_at DateTime @default(now()) @updatedAt
 }
 
+model SystemConfig {
+  key         String   @id
+  value       String
+  description String?
+  updated_at  DateTime @updatedAt
+}
