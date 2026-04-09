@@ -137,3 +137,11 @@ model SystemConfig {
   description String?
   updated_at  DateTime @updatedAt
 }
+
+model EmailTemplate {
+  key         String   @id
+  subject     String
+  body        String
+  description String?
+  updated_at  DateTime @updatedAt
+}
