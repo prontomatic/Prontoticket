@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendCierre48h, sendAviso24h, sendCsat } from '@/services/notificationService';
+import { getConfigNumber } from '@/services/configService';
 
 export async function GET(request) {
   // Verificación simple de Vercel Cron
@@ -10,6 +11,10 @@ export async function GET(request) {
   }
 
   const now = new Date();
+
+  // Leer umbrales desde la configuración del sistema
+  const avisoHoras = await getConfigNumber('cierre_aviso_horas');
+  const cierreHoras = await getConfigNumber('cierre_auto_horas');
 
   // Buscar tickets en estado "Esperando Cliente"
   const ticketsWaiting = await prisma.ticket.findMany({
@@ -23,11 +28,9 @@ export async function GET(request) {
     }
   });
 
-  const results = { closed: 0, warned: 0, errors: [] };
+  const results = { closed: 0, warned: 0, errors: [], config: { avisoHoras, cierreHoras } };
 
   for (const ticket of ticketsWaiting) {
-    // La referencia es cuándo el ticket entró en EN_ESPERA_CLIENTE (última transición a ese estado).
-    // Fallback a updated_at si por alguna razón no hay registro en StatusHistory.
     const lastTransition = ticket.status_history[0];
     const referenceDate = lastTransition
       ? new Date(lastTransition.changed_at)
@@ -35,7 +38,7 @@ export async function GET(request) {
     const diffHours = (now - referenceDate) / (1000 * 60 * 60);
 
     try {
-      if (diffHours >= 48) {
+      if (diffHours >= cierreHoras) {
         const updated = await prisma.$transaction(async (tx) => {
           await tx.statusHistory.create({
             data: {
@@ -51,17 +54,14 @@ export async function GET(request) {
           });
         });
 
-        // Enviar notificación de cierre automático
         await sendCierre48h(updated);
-        // Enviar encuesta CSAT
         try {
           await sendCsat(updated);
         } catch (csatError) {
           console.error(`[Cron] Error enviando CSAT para ticket #${ticket.id}:`, csatError);
         }
         results.closed++;
-      } else if (diffHours >= 24 && diffHours < 25) {
-        // Aviso preventivo a las 24 hrs (asumiendo que cron corre cada 1h)
+      } else if (diffHours >= avisoHoras && diffHours < avisoHoras + 1) {
         await sendAviso24h(ticket);
         results.warned++;
       }
