@@ -1,8 +1,7 @@
 import { sendOutboundEmail } from './emailService';
 import { prisma } from '@/lib/prisma';
 
-// DP-01 Placeholder
-const CSAT_SURVEY_URL = process.env.CSAT_SURVEY_URL || 'https://forms.gle/placeholder';
+import { getConfig } from './configService';
 
 /**
  * Registra un correo automático enviado como un Message del sistema
@@ -140,6 +139,9 @@ contacto@prontomatic.cl`;
  * Template 4: Encuesta CSAT
  */
 export async function sendCsat(ticket, originalMessageId = null) {
+  // Leer URL de encuesta desde configuración del sistema
+  const csatUrl = await getConfig('csat_survey_url');
+
   const subject = `[#${ticket.id}] ¿Cómo fue tu experiencia con nuestro soporte?`;
   const text = `Hola,
 
@@ -152,7 +154,7 @@ sobre la atención que recibiste.
 
 ¿Podrías tomarte un minuto para responder nuestra breve encuesta?
 
-${CSAT_SURVEY_URL}
+${csatUrl}
 
 Tu opinión nos ayuda a mejorar continuamente para ofrecerte un mejor servicio.
 

@@ -59,6 +59,7 @@ export default function Navbar() {
     { label: 'Métricas', icon: BarChart3, path: '/dashboard/metricas', roles: ['SUPERVISOR', 'ADMINISTRADOR'], group: 'supervision' },
     { label: 'Usuarios', icon: Users, path: '/admin/usuarios', roles: ['ADMINISTRADOR'], group: 'admin' },
     { label: 'Categorías', icon: Tag, path: '/admin/categorias', roles: ['ADMINISTRADOR'], group: 'admin' },
+    { label: 'Configuración', icon: Settings, path: '/admin/configuracion', roles: ['ADMINISTRADOR'], group: 'admin' },
   ];
 
   const visibleItems = role ? allMenuItems.filter(item => item.roles.includes(role)) : [];
