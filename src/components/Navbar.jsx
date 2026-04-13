@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabaseClient } from '@/lib/supabase-client';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { LogOut, Ticket, Bell, Settings, User, BarChart3, Users, Tag, Mail } from 'lucide-react';
+import { LogOut, Ticket, Bell, Settings, User, BarChart3, Users, Tag, Mail, Shield } from 'lucide-react';
 
 export default function Navbar() {
   const [user, setUser] = useState(null);
@@ -57,6 +57,7 @@ export default function Navbar() {
   const allMenuItems = [
     { label: 'Mi Perfil', icon: User, path: '/perfil', roles: ['AGENTE', 'SUPERVISOR', 'ADMINISTRADOR'], group: 'personal' },
     { label: 'Métricas', icon: BarChart3, path: '/dashboard/metricas', roles: ['SUPERVISOR', 'ADMINISTRADOR'], group: 'supervision' },
+    { label: 'Correos Filtrados', icon: Shield, path: '/admin/correos-filtrados', roles: ['SUPERVISOR', 'ADMINISTRADOR'], group: 'supervision' },
     { label: 'Usuarios', icon: Users, path: '/admin/usuarios', roles: ['ADMINISTRADOR'], group: 'admin' },
     { label: 'Categorías', icon: Tag, path: '/admin/categorias', roles: ['ADMINISTRADOR'], group: 'admin' },
     { label: 'Configuración', icon: Settings, path: '/admin/configuracion', roles: ['ADMINISTRADOR'], group: 'admin' },

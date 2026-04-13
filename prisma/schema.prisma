@@ -147,3 +147,17 @@ model EmailTemplate {
   description String?
   updated_at  DateTime @updatedAt
 }
+
+model FilteredEmail {
+  id            Int      @id @default(autoincrement())
+  from_email    String
+  from_name     String?
+  subject       String
+  body_preview  String   // Primeros 500 caracteres del cuerpo
+  score         Int      // Puntuación total que activó el filtro
+  reasons       String   // Lista de motivos separados por comas
+  filtered_at   DateTime @default(now())
+
+  @@index([filtered_at])
+  @@index([from_email])
+}

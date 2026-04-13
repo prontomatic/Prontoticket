@@ -7,6 +7,7 @@ const DEFAULTS = {
   'cierre_aviso_horas': { value: '24', description: 'Horas sin respuesta del cliente antes de enviar aviso de cortesía' },
   'cierre_auto_horas': { value: '48', description: 'Horas sin respuesta del cliente antes del cierre automático' },
   'csat_survey_url': { value: 'https://forms.gle/placeholder', description: 'URL del formulario de encuesta de satisfacción (CSAT)' },
+  'spam_threshold': { value: '70', description: 'Umbral de puntuación para filtrar correos como spam (Estricto: 50, Normal: 70, Permisivo: 100)' },
 };
 
 /**
