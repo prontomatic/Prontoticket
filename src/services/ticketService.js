@@ -1,6 +1,34 @@
 import { prisma } from '@/lib/prisma';
 import { fetchLegacyCustomerData } from './integrationService';
 import { sendAcuseRecibo, sendCsat } from './notificationService';
+import { uploadAttachment } from './storageService';
+
+/**
+ * Sube los archivos a Storage y crea los registros Attachment con su estado de subida.
+ * Se ejecuta FUERA de la transacción de BD para no bloquear conexiones durante la subida.
+ * @param {Array} attachments - Array con {file, fileName, mimeType, fileSize}
+ * @param {number} ticketId - ID del ticket
+ * @param {number} messageId - ID del mensaje asociado
+ */
+async function processAttachments(attachments, ticketId, messageId) {
+  if (!attachments || attachments.length === 0) return;
+
+  for (const att of attachments) {
+    const result = await uploadAttachment(att.file, ticketId, messageId);
+
+    await prisma.attachment.create({
+      data: {
+        message_id: messageId,
+        file_name: att.fileName,
+        storage_path: result.success ? result.storagePath : '',
+        mime_type: att.mimeType,
+        file_size: att.fileSize,
+        upload_status: result.success ? 'OK' : 'ERROR',
+        upload_error: result.success ? null : (result.error || 'Error desconocido')
+      }
+    });
+  }
+}
 
 /**
  * Crea un registro en el historial de estados (StatusHistory) y actualiza fechas
@@ -99,22 +127,7 @@ export async function createTicketFromWebhook(data) {
       }
     });
 
-    // 3. Crear adjuntos
-    if (data.attachments && data.attachments.length > 0) {
-      for (const att of data.attachments) {
-        await tx.attachment.create({
-          data: {
-            message_id: newMessage.id,
-            file_name: att.fileName,
-            storage_path: att.storagePath,
-            mime_type: att.mimeType,
-            file_size: att.fileSize
-          }
-        });
-      }
-    }
-
-    // 4. Crear StateHistory inicial
+    // 3. StateHistory inicial (los adjuntos se procesan fuera de la transacción)
     await tx.statusHistory.create({
       data: {
         ticket_id: newTicket.id,
@@ -125,17 +138,24 @@ export async function createTicketFromWebhook(data) {
       }
     });
 
-    return newTicket;
+    return { newTicket, newMessage };
   });
 
-  // 5. Disparar Acuse de Recibo en bg (fuera de la transacción)
+  // Procesar adjuntos FUERA de la transacción (evita bloquear conexiones durante uploads lentos)
   try {
-    await sendAcuseRecibo(ticket, data.messageId);
+    await processAttachments(data.attachments, ticket.newTicket.id, ticket.newMessage.id);
+  } catch (error) {
+    console.error('Failed to process attachments', error);
+  }
+
+  // Disparar Acuse de Recibo
+  try {
+    await sendAcuseRecibo(ticket.newTicket, data.messageId);
   } catch (error) {
     console.error('Failed to send Acuse Recibo', error);
   }
 
-  return { duplicate: false, ticket };
+  return { duplicate: false, ticket: ticket.newTicket };
 }
 
 /**
@@ -164,19 +184,7 @@ export async function appendInboundMessage(ticketId, data) {
       }
     });
 
-    if (data.attachments && data.attachments.length > 0) {
-      for (const att of data.attachments) {
-        await tx.attachment.create({
-          data: {
-            message_id: newMessage.id,
-            file_name: att.fileName,
-            storage_path: att.storagePath,
-            mime_type: att.mimeType,
-            file_size: att.fileSize
-          }
-        });
-      }
-    }
+    // Los adjuntos se procesan fuera de la transacción
 
     // Actualizar last_client_reply_at y mover estado a EN_PROCESO_INTERNO si está EN_ESPERA_CLIENTE
     let newStatus = ticket.status;
@@ -204,6 +212,13 @@ export async function appendInboundMessage(ticketId, data) {
 
     return newMessage;
   });
+
+  // Procesar adjuntos FUERA de la transacción
+  try {
+    await processAttachments(data.attachments, ticketId, result.id);
+  } catch (error) {
+    console.error('Failed to process attachments', error);
+  }
 
   return { duplicate: false, message: result };
 }

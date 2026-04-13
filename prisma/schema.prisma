@@ -96,16 +96,18 @@ model Message {
 }
 
 model Attachment {
-  id           Int      @id @default(autoincrement())
-  message_id   Int
-  file_name    String
-  storage_path String
-  mime_type    String
-  file_size    Int?
-  created_at   DateTime @default(now())
+  id            Int      @id @default(autoincrement())
+  message_id    Int
+  file_name     String
+  storage_path  String
+  mime_type     String
+  file_size     Int?
+  upload_status String   @default("OK")
+  upload_error  String?
+  created_at    DateTime @default(now())
 
   // Relations
-  message      Message  @relation(fields: [message_id], references: [id])
+  message       Message  @relation(fields: [message_id], references: [id])
 }
 
 model StatusHistory {
