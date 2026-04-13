@@ -71,6 +71,38 @@ function AttachmentViewer({ attachment, sessionToken }) {
       const res = await fetch(`/api/attachments/${attachment.id}/url`, {
         headers: { 'Authorization': `Bearer ${sessionToken}` }
       });
+      if (!res.ok) {
+        toast.error('No se pudo obtener el archivo');
+        return;
+      }
+      const data = await res.json();
+
+      // Descargar el archivo como blob y forzar el diálogo de guardado
+      const fileRes = await fetch(data.url);
+      if (!fileRes.ok) {
+        toast.error('Error al descargar el archivo');
+        return;
+      }
+      const blob = await fileRes.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = attachment.file_name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      toast.error('Error de red');
+    }
+  };
+
+  const handleOpenInNewTab = async () => {
+    try {
+      const res = await fetch(`/api/attachments/${attachment.id}/url`, {
+        headers: { 'Authorization': `Bearer ${sessionToken}` }
+      });
       if (res.ok) {
         const data = await res.json();
         window.open(data.url, '_blank');
@@ -144,7 +176,7 @@ function AttachmentViewer({ attachment, sessionToken }) {
   // PDF
   if (isPdf) {
     return (
-      <button onClick={handleDownload} className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors text-sm max-w-sm">
+      <button onClick={handleOpenInNewTab} className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors text-sm max-w-sm">
         <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
           <FileText className="w-5 h-5 text-red-600" />
         </div>
