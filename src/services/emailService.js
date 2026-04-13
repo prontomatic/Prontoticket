@@ -41,7 +41,7 @@ export function htmlToMarkdown(html) {
  * @param {string} [params.inReplyTo] - Message-ID original para mantener hilo
  * @param {string} [params.references] - Referencias para mantener hilo
  */
-export async function sendOutboundEmail({ to, subject, text, inReplyTo, references }) {
+export async function sendOutboundEmail({ to, subject, text, inReplyTo, references, attachments }) {
   const msg = {
     to,
     from: {
@@ -58,6 +58,17 @@ export async function sendOutboundEmail({ to, subject, text, inReplyTo, referenc
   }
   if (references) {
     msg.headers['References'] = references;
+  }
+
+  // Adjuntos en formato SendGrid:
+  // Cada adjunto debe tener: { content (base64), filename, type, disposition }
+  if (attachments && attachments.length > 0) {
+    msg.attachments = attachments.map(att => ({
+      content: att.content,
+      filename: att.filename,
+      type: att.type || 'application/octet-stream',
+      disposition: 'attachment'
+    }));
   }
 
   try {

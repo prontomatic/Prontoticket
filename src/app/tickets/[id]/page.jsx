@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState, use, useRef } from 'react';
 import { supabaseClient } from '@/lib/supabase-client';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
@@ -21,7 +21,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowLeft, Send, Paperclip, UserCircle, Briefcase, Phone, MapPin, CheckCircle2, LockIcon, Download, FileText, Image as ImageIcon, Video, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, UserCircle, Briefcase, Phone, MapPin, CheckCircle2, LockIcon, Download, FileText, Image as ImageIcon, Video, AlertCircle, X, Plus } from 'lucide-react';
 
 const statusColors = {
   ABIERTO: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -213,6 +213,12 @@ export default function TicketDetailPage({ params }) {
   const [session, setSession] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [nuevoEstado, setNuevoEstado] = useState('EN_ESPERA_CLIENTE');
+  const [attachedFiles, setAttachedFiles] = useState([]);
+  const fileInputRef = useRef(null);
+
+  // Constantes de validación (deben coincidir con el backend)
+  const MAX_FILE_SIZE = 25 * 1024 * 1024;
+  const MAX_FILES = 5;
 
   const fetchTicket = async (access_token) => {
     try {
@@ -258,21 +264,78 @@ export default function TicketDetailPage({ params }) {
     } catch (e) { toast.error('Error de red'); }
   };
 
+  const handleFileSelect = (e) => {
+    const newFiles = Array.from(e.target.files || []);
+    if (newFiles.length === 0) return;
+
+    // Validar cantidad total
+    if (attachedFiles.length + newFiles.length > MAX_FILES) {
+      toast.error(`Máximo ${MAX_FILES} archivos por respuesta`);
+      return;
+    }
+
+    // Validar tamaño individual
+    for (const file of newFiles) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`"${file.name}" supera el límite de 25 MB`);
+        return;
+      }
+    }
+
+    setAttachedFiles(prev => [...prev, ...newFiles]);
+    // Resetear el input para permitir seleccionar el mismo archivo de nuevo si se quitó
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleRemoveFile = (index) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   const handleResponder = async () => {
     if (!responseBody.trim()) return toast.error('El mensaje no puede estar vacío');
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/tickets/${ticketId}/mensajes`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ body: responseBody, set_status: nuevoEstado })
-      });
+      let res;
+
+      if (attachedFiles.length > 0) {
+        // Envío con adjuntos: multipart/form-data
+        const formData = new FormData();
+        formData.append('body', responseBody);
+        formData.append('set_status', nuevoEstado);
+        attachedFiles.forEach(file => formData.append('files', file));
+
+        res = await fetch(`/api/tickets/${ticketId}/mensajes`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+          body: formData
+        });
+      } else {
+        // Envío sin adjuntos: JSON (compatibilidad con flujo anterior)
+        res = await fetch(`/api/tickets/${ticketId}/mensajes`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ body: responseBody, set_status: nuevoEstado })
+        });
+      }
+
       if (res.ok) {
-        toast.success('Respuesta enviada exitosamente');
+        const data = await res.json();
+        if (data.attachmentsFailed > 0) {
+          toast.warning(`Respuesta enviada, pero ${data.attachmentsFailed} adjunto(s) fallaron al subir`);
+        } else {
+          toast.success('Respuesta enviada exitosamente');
+        }
         setResponseBody('');
+        setAttachedFiles([]);
         fetchTicket(session.access_token);
       } else {
         const d = await res.json();
@@ -410,8 +473,55 @@ export default function TicketDetailPage({ params }) {
                       value={responseBody}
                       onChange={(e) => setResponseBody(e.target.value)}
                     />
+
+                    {/* Vista previa de archivos adjuntos seleccionados */}
+                    {attachedFiles.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {attachedFiles.map((file, idx) => (
+                          <div key={idx} className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm">
+                            <Paperclip className="w-3.5 h-3.5 text-[#003F8A] shrink-0" />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-slate-800 font-medium truncate max-w-[180px]">{file.name}</span>
+                              <span className="text-xs text-slate-500">{formatFileSize(file.size)}</span>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveFile(idx)}
+                              type="button"
+                              className="text-slate-400 hover:text-red-600 transition-colors shrink-0 ml-1"
+                              aria-label="Quitar archivo"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="p-3 bg-slate-50 border-t border-slate-100 flex justify-end">
+                  <div className="p-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+                    {/* Botón de adjuntar (lado izquierdo) */}
+                    <div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={submitting || attachedFiles.length >= MAX_FILES}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-sm font-medium text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <Paperclip className="w-4 h-4" />
+                        Adjuntar archivo
+                        {attachedFiles.length > 0 && (
+                          <span className="text-xs text-slate-500">({attachedFiles.length}/{MAX_FILES})</span>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Botón de enviar (lado derecho) */}
                     <Button onClick={handleResponder} disabled={submitting} className="bg-[#003F8A] hover:bg-[#002F6C] text-white rounded-full px-6 shadow-md shadow-blue-600/20">
                       {submitting ? 'Enviando...' : 'Enviar Respuesta'}
                     </Button>
