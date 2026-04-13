@@ -16,7 +16,19 @@ turndown.addRule('removeSignatureDividers', {
 
 export function htmlToMarkdown(html) {
   if (!html) return '';
-  return turndown.turndown(html);
+  const markdown = turndown.turndown(html);
+
+  // Limpiar referencias a imágenes embebidas por Content-ID (cid:...)
+  // Estas apuntan a imágenes inline del correo que ya vienen como adjuntos separados.
+  // Ejemplos que se eliminan:
+  //   ![](cid:ii_19d8779c7e7a43d0ab1)
+  //   ![alt text](cid:image001.png@01D8A1B2.C3D4E5F0)
+  //   [text](cid:something)
+  return markdown
+    .replace(/!\[[^\]]*\]\(cid:[^)]+\)/gi, '')  // Imágenes embebidas ![](cid:...)
+    .replace(/\[[^\]]*\]\(cid:[^)]+\)/gi, '')   // Enlaces con cid:
+    .replace(/\n{3,}/g, '\n\n')                  // Colapsar múltiples saltos de línea
+    .trim();
 }
 
 /**
