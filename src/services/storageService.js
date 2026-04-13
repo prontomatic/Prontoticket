@@ -76,3 +76,32 @@ export async function getSignedUrl(storagePath) {
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Descarga un archivo de Storage y lo devuelve como base64.
+ * Usado para reenviar adjuntos al cliente vía SendGrid.
+ * @param {string} storagePath - Path del archivo en el bucket
+ * @returns {Promise<{success: boolean, content?: string, error?: string}>}
+ */
+export async function downloadAsBase64(storagePath) {
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .download(storagePath);
+
+    if (error) {
+      console.error('[Storage] Error descargando archivo:', error);
+      return { success: false, error: error.message };
+    }
+
+    const arrayBuffer = await data.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString('base64');
+
+    return { success: true, content: base64 };
+  } catch (error) {
+    console.error('[Storage] Excepción al descargar:', error);
+    return { success: false, error: error.message };
+  }
+}
