@@ -21,7 +21,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowLeft, Send, Paperclip, UserCircle, Briefcase, Phone, MapPin, CheckCircle2, LockIcon } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, UserCircle, Briefcase, Phone, MapPin, CheckCircle2, LockIcon, Download, FileText, Image as ImageIcon, Video, AlertCircle } from 'lucide-react';
 
 const statusColors = {
   ABIERTO: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -29,6 +29,146 @@ const statusColors = {
   EN_ESPERA_CLIENTE: 'bg-purple-100 text-purple-700 border-purple-200',
   CERRADO: 'bg-slate-100 text-slate-700 border-slate-200'
 };
+
+function AttachmentViewer({ attachment, sessionToken }) {
+  const [signedUrl, setSignedUrl] = useState(null);
+  const [loadingUrl, setLoadingUrl] = useState(false);
+  const [urlError, setUrlError] = useState(false);
+
+  const mimeType = attachment.mime_type || '';
+  const isImage = mimeType.startsWith('image/');
+  const isVideo = mimeType.startsWith('video/');
+  const isPdf = mimeType === 'application/pdf';
+  const uploadFailed = attachment.upload_status === 'ERROR';
+
+  // Cargar URL firmada al montar (para imágenes y videos que se muestran inline)
+  useEffect(() => {
+    if (uploadFailed || (!isImage && !isVideo && !isPdf)) return;
+
+    const loadUrl = async () => {
+      setLoadingUrl(true);
+      try {
+        const res = await fetch(`/api/attachments/${attachment.id}/url`, {
+          headers: { 'Authorization': `Bearer ${sessionToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSignedUrl(data.url);
+        } else {
+          setUrlError(true);
+        }
+      } catch (e) {
+        setUrlError(true);
+      } finally {
+        setLoadingUrl(false);
+      }
+    };
+    loadUrl();
+  }, [attachment.id, sessionToken, isImage, isVideo, isPdf, uploadFailed]);
+
+  const handleDownload = async () => {
+    try {
+      const res = await fetch(`/api/attachments/${attachment.id}/url`, {
+        headers: { 'Authorization': `Bearer ${sessionToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        window.open(data.url, '_blank');
+      } else {
+        toast.error('No se pudo obtener el archivo');
+      }
+    } catch (e) {
+      toast.error('Error de red');
+    }
+  };
+
+  // Estado de error de subida
+  if (uploadFailed) {
+    return (
+      <div className="flex items-center gap-2 p-3 rounded-lg border border-red-200 bg-red-50 text-sm">
+        <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+        <div>
+          <p className="font-medium text-red-800">{attachment.file_name}</p>
+          <p className="text-xs text-red-600">Error al subir el archivo</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Imagen
+  if (isImage) {
+    return (
+      <div className="rounded-lg overflow-hidden border border-slate-200 max-w-sm">
+        {loadingUrl || !signedUrl ? (
+          <div className="flex items-center justify-center h-48 bg-slate-50">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#003F8A]" />
+          </div>
+        ) : (
+          <a href={signedUrl} target="_blank" rel="noopener noreferrer">
+            <img src={signedUrl} alt={attachment.file_name} className="w-full h-auto max-h-80 object-contain bg-slate-50" />
+          </a>
+        )}
+        <div className="px-3 py-2 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+          <span className="text-xs text-slate-600 truncate flex-1 mr-2">{attachment.file_name}</span>
+          <button onClick={handleDownload} className="text-xs text-[#003F8A] hover:underline flex items-center gap-1 shrink-0">
+            <Download className="w-3 h-3" /> Descargar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Video
+  if (isVideo) {
+    return (
+      <div className="rounded-lg overflow-hidden border border-slate-200 max-w-md">
+        {loadingUrl || !signedUrl ? (
+          <div className="flex items-center justify-center h-48 bg-slate-50">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#003F8A]" />
+          </div>
+        ) : (
+          <video controls src={signedUrl} className="w-full max-h-80 bg-black" />
+        )}
+        <div className="px-3 py-2 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+          <span className="text-xs text-slate-600 truncate flex-1 mr-2 flex items-center gap-1">
+            <Video className="w-3 h-3" /> {attachment.file_name}
+          </span>
+          <button onClick={handleDownload} className="text-xs text-[#003F8A] hover:underline flex items-center gap-1 shrink-0">
+            <Download className="w-3 h-3" /> Descargar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // PDF
+  if (isPdf) {
+    return (
+      <button onClick={handleDownload} className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors text-sm max-w-sm">
+        <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
+          <FileText className="w-5 h-5 text-red-600" />
+        </div>
+        <div className="flex-1 text-left min-w-0">
+          <p className="font-medium text-slate-900 truncate">{attachment.file_name}</p>
+          <p className="text-xs text-slate-500">PDF · Haz clic para abrir</p>
+        </div>
+      </button>
+    );
+  }
+
+  // Otros
+  return (
+    <button onClick={handleDownload} className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors text-sm max-w-sm">
+      <div className="w-10 h-10 rounded-lg bg-[#E8F0FB] flex items-center justify-center shrink-0">
+        <Download className="w-5 h-5 text-[#003F8A]" />
+      </div>
+      <div className="flex-1 text-left min-w-0">
+        <p className="font-medium text-slate-900 truncate">{attachment.file_name}</p>
+        <p className="text-xs text-slate-500">Descargar archivo</p>
+      </div>
+    </button>
+  );
+}
 
 export default function TicketDetailPage({ params }) {
   const unwrappedParams = use(params);
@@ -189,11 +329,13 @@ export default function TicketDetailPage({ params }) {
                            {msg.body}
                         </div>
                         {msg.attachments && msg.attachments.length > 0 && (
-                          <div className={`mt-2 flex gap-2 ${isAgent ? 'justify-end' : 'justify-start'} w-full`}>
+                          <div className={`mt-3 flex flex-col gap-2 ${isAgent ? 'items-end' : 'items-start'} w-full`}>
                              {msg.attachments.map(att => (
-                               <Badge key={att.id} variant="secondary" className="bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 cursor-pointer p-2 rounded-lg">
-                                  <Paperclip className="w-3 h-3 mr-1.5" /> {att.file_name}
-                               </Badge>
+                               <AttachmentViewer
+                                 key={att.id}
+                                 attachment={att}
+                                 sessionToken={session?.access_token}
+                               />
                              ))}
                           </div>
                         )}
@@ -238,7 +380,7 @@ export default function TicketDetailPage({ params }) {
                     />
                   </div>
                   <div className="p-3 bg-slate-50 border-t border-slate-100 flex justify-end">
-                    <Button onClick={handleResponder} disabled={submitting} className="bg-orange-600 hover:bg-[#002F6C] text-white rounded-full px-6 shadow-md shadow-blue-600/20">
+                    <Button onClick={handleResponder} disabled={submitting} className="bg-[#003F8A] hover:bg-[#002F6C] text-white rounded-full px-6 shadow-md shadow-blue-600/20">
                       {submitting ? 'Enviando...' : 'Enviar Respuesta'}
                     </Button>
                   </div>

@@ -88,15 +88,15 @@ export async function POST(request) {
       }
     }
 
-    // Extraer adjuntos
+    // Extraer adjuntos — pasar el objeto File en crudo, la subida a Storage se hará después
     const attachments = [];
     const attachmentsCount = parseInt(formData.get('attachments') || '0', 10);
     for (let i = 1; i <= attachmentsCount; i++) {
         const file = formData.get(`attachment${i}`);
         if (file && file.size > 0) {
             attachments.push({
+                file,  // File object en crudo, storageService lo subirá
                 fileName: file.name,
-                storagePath: `tickets/temp/${file.name}`,
                 mimeType: file.type,
                 fileSize: file.size
             });
