@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma';
+import { getConfigNumber } from './configService';
 
-// Umbral de puntuación a partir del cual un correo se considera spam/automático
-const SPAM_THRESHOLD = 70;
+// Umbral por defecto si no hay configuración en BD
+const DEFAULT_SPAM_THRESHOLD = 70;
 
 // Dominios conocidos de envío masivo/marketing
 const MASS_MAIL_DOMAINS = [
@@ -128,7 +129,7 @@ function getHeader(headersString, headerName) {
  * @param {Object} emailData - { from, subject, headersString, body }
  * @returns {Object} { score, reasons, shouldFilter }
  */
-export function analyzeEmail(emailData) {
+export async function analyzeEmail(emailData) {
   const { from, subject, headersString, body } = emailData;
   const fromEmail = extractEmail(from);
   const fromDomain = fromEmail.includes('@') ? fromEmail.split('@')[1] : '';
@@ -232,11 +233,14 @@ export function analyzeEmail(emailData) {
     reasons.push(`Palabras clave de marketing en asunto: ${matchedKeywords.join(', ')}`);
   }
 
+  // Leer umbral desde configuración del sistema (fallback al default)
+  const threshold = await getConfigNumber('spam_threshold') || DEFAULT_SPAM_THRESHOLD;
+
   return {
     score,
     reasons,
-    shouldFilter: score >= SPAM_THRESHOLD,
-    threshold: SPAM_THRESHOLD
+    shouldFilter: score >= threshold,
+    threshold
   };
 }
 
