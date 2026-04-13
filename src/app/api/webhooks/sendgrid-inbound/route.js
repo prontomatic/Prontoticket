@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { verifySendGridSignature } from '@/lib/sendgrid-webhook';
 import { htmlToMarkdown } from '@/services/emailService';
 import { createTicketFromWebhook, appendInboundMessage } from '@/services/ticketService';
+import { analyzeEmail, logFilteredEmail } from '@/services/spamFilterService';
 import { prisma } from '@/lib/prisma';
 
 // Función auxiliar para extraer correo de un string "Nombre <correo@df.com>"
@@ -85,6 +86,31 @@ export async function POST(request) {
       // Si el ticket existe, pero está CERRADO, la regla de negocio dice que hay que crear uno NUEVO.
       if (existing && existing.client_email === clientEmail && existing.status !== 'CERRADO') {
         targetTicketId = existing.id;
+      }
+    }
+
+    // Filtrado de spam / correos automáticos
+    // Solo aplica para correos nuevos (NO para respuestas a tickets existentes).
+    // Esto evita perder respuestas legítimas de clientes cuyo asunto/firma active el filtro por error.
+    if (!targetTicketId) {
+      const analysis = analyzeEmail({
+        from,
+        subject,
+        headersString,
+        body: bodyMarkdown
+      });
+
+      if (analysis.shouldFilter) {
+        console.info(`[Webhook] Correo filtrado: score=${analysis.score}, razones=${analysis.reasons.join(', ')}`);
+        await logFilteredEmail({
+          from,
+          subject,
+          body: bodyMarkdown,
+          score: analysis.score,
+          reasons: analysis.reasons
+        });
+        // Responder 200 a SendGrid para que no reintente
+        return NextResponse.json({ success: true, filtered: true, score: analysis.score });
       }
     }
 
