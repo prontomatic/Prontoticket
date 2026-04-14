@@ -27,6 +27,7 @@ const PERIODS = [
   { value: '30d', label: '30 días' },
   { value: '90d', label: '90 días' },
   { value: 'all', label: 'Todo' },
+  { value: 'custom', label: 'Personalizado' },
 ];
 
 function formatHours(hours) {
@@ -42,13 +43,22 @@ export default function MetricasPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [session, setSession] = useState(null);
   const router = useRouter();
 
-  const fetchMetrics = async (token, selectedPeriod) => {
+  const fetchMetrics = async (token, selectedPeriod, fromDate, toDate) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/metricas?period=${selectedPeriod}`, {
+      const params = new URLSearchParams();
+      if (selectedPeriod === 'custom') {
+        if (fromDate) params.append('date_from', fromDate);
+        if (toDate) params.append('date_to', toDate);
+      } else {
+        params.append('period', selectedPeriod);
+      }
+      const res = await fetch(`/api/metricas?${params.toString()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -73,8 +83,29 @@ export default function MetricasPage() {
 
   const handlePeriodChange = (newPeriod) => {
     setPeriod(newPeriod);
+    if (newPeriod === 'custom') {
+      // No recarga aún; espera a que el usuario elija fechas
+      return;
+    }
+    setCustomFrom('');
+    setCustomTo('');
     if (session) fetchMetrics(session.access_token, newPeriod);
   };
+
+  // Recargar cuando cambian las fechas custom (con debounce)
+  useEffect(() => {
+    if (period !== 'custom' || !session) return;
+    // Validar que ambas fechas estén puestas y que from <= to
+    if (!customFrom || !customTo) return;
+    if (new Date(customFrom) > new Date(customTo)) {
+      toast.error('La fecha "Desde" no puede ser mayor que "Hasta"');
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetchMetrics(session.access_token, 'custom', customFrom, customTo);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [customFrom, customTo, period, session]);
 
   const roleLabels = { AGENTE: 'Agente', SUPERVISOR: 'Supervisor', ADMINISTRADOR: 'Admin' };
 
@@ -102,25 +133,49 @@ export default function MetricasPage() {
             </p>
           </div>
           {/* Filtro de período */}
-          <div style={{ display: 'flex', gap: '4px', background: 'white', borderRadius: '10px', border: '1px solid #E2E8F0', padding: '4px' }}>
-            {PERIODS.map(p => (
-              <button
-                key={p.value}
-                onClick={() => handlePeriodChange(p.value)}
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  background: period === p.value ? '#003F8A' : 'transparent',
-                  color: period === p.value ? 'white' : '#64748B',
-                }}
-              >
-                {p.label}
-              </button>
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: '4px', background: 'white', borderRadius: '10px', border: '1px solid #E2E8F0', padding: '4px' }}>
+              {PERIODS.map(p => (
+                <button
+                  key={p.value}
+                  onClick={() => handlePeriodChange(p.value)}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    background: period === p.value ? '#003F8A' : 'transparent',
+                    color: period === p.value ? 'white' : '#64748B',
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {period === 'custom' && (
+              <div style={{ display: 'flex', gap: '8px', background: 'white', borderRadius: '10px', border: '1px solid #E2E8F0', padding: '8px 12px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <label style={{ fontSize: '10px', fontWeight: '600', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Desde</label>
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={e => setCustomFrom(e.target.value)}
+                    style={{ height: '32px', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '0 8px', fontSize: '13px', background: '#F8FAFC', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <label style={{ fontSize: '10px', fontWeight: '600', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Hasta</label>
+                  <input
+                    type="date"
+                    value={customTo}
+                    onChange={e => setCustomTo(e.target.value)}
+                    style={{ height: '32px', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '0 8px', fontSize: '13px', background: '#F8FAFC', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

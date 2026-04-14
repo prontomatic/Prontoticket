@@ -72,6 +72,7 @@ model Ticket {
   updated_at           DateTime     @updatedAt
   closed_at            DateTime?
   last_client_reply_at DateTime?
+  deleted_at           DateTime?
 
   // Relations
   category             Category?    @relation(fields: [category_id], references: [id])
