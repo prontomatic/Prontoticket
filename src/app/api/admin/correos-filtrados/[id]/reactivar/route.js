@@ -50,6 +50,7 @@ export async function POST(request, context) {
           content: `[Reactivado desde correo filtrado el ${new Date().toLocaleString('es-CL')}]\n\n${filteredEmail.body_preview}\n\n---\n\nNOTA: Este ticket fue reactivado desde un correo que el sistema filtró automáticamente. El contenido mostrado puede estar truncado (máx. 500 caracteres). Si requiere la información completa o los adjuntos originales, solicítelos al cliente.`,
           status: 'ABIERTO',
           client_email: filteredEmail.from_email,
+          client_name: filteredEmail.from_name || null,
           client_rut,
           client_phone,
           client_address,

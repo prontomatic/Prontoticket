@@ -11,6 +11,21 @@ function extractEmail(fromField) {
   return match ? match[1] : fromField;
 }
 
+// Función auxiliar para extraer el nombre del remitente si viene en el header
+// Ej: '"Ricardo Vásquez" <vasquez@gmail.com>' → 'Ricardo Vásquez'
+// Si no hay nombre o es igual al email, devuelve null.
+function extractName(fromField) {
+  if (!fromField) return null;
+  const match = fromField.match(/^([^<]+)</);
+  if (!match) return null;
+  const name = match[1].trim().replace(/^["']|["']$/g, '').trim();
+  if (!name) return null;
+  // Si el "nombre" es idéntico al email, no aporta información
+  const email = extractEmail(fromField).toLowerCase();
+  if (name.toLowerCase() === email) return null;
+  return name;
+}
+
 export async function POST(request) {
   try {
     // 1. Verificación de Seguridad de SendGrid
@@ -54,6 +69,7 @@ export async function POST(request) {
     const headersString = formData.get('headers');
     
     const clientEmail = extractEmail(from || '');
+    const clientName = extractName(from || '');
     const bodyMarkdown = html ? htmlToMarkdown(html) : text;
     
     // Extraer Message-ID y referencias
@@ -133,6 +149,7 @@ export async function POST(request) {
         subject,
         body: bodyMarkdown,
         clientEmail,
+        clientName,
         messageId,
         attachments
     };
