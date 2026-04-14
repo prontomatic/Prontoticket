@@ -12,6 +12,26 @@ function getPeriodStart(period) {
     }
 }
 
+/**
+ * Construye el filtro WHERE de fechas priorizando rango personalizado sobre preset.
+ */
+function buildDateWhere(period, dateFrom, dateTo) {
+    // Prioridad 1: rango personalizado (date_from / date_to)
+    if (dateFrom || dateTo) {
+        const where = {};
+        if (dateFrom) where.gte = new Date(dateFrom);
+        if (dateTo) {
+            const end = new Date(dateTo);
+            end.setHours(23, 59, 59, 999);
+            where.lte = end;
+        }
+        return { created_at: where };
+    }
+    // Prioridad 2: preset
+    const periodStart = getPeriodStart(period);
+    return periodStart ? { created_at: { gte: periodStart } } : {};
+}
+
 export async function GET(request) {
     const user = await authenticateUser(request);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -21,17 +41,22 @@ export async function GET(request) {
 
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || '30d';
-    const periodStart = getPeriodStart(period);
-    const periodWhere = periodStart ? { created_at: { gte: periodStart } } : {};
+    const dateFrom = searchParams.get('date_from');
+    const dateTo = searchParams.get('date_to');
+    const periodWhere = buildDateWhere(period, dateFrom, dateTo);
+    // Para el cálculo de trend, necesitamos saber la fecha de inicio efectiva
+    const effectiveStart = periodWhere.created_at?.gte || null;
+    // Excluir tickets eliminados lógicamente en todas las métricas
+    const baseWhere = { ...periodWhere, deleted_at: null };
 
     try {
         // 1. KPIs
-        const totalTickets = await prisma.ticket.count({ where: periodWhere });
-        const openTickets = await prisma.ticket.count({ where: { status: { not: 'CERRADO' } } });
+        const totalTickets = await prisma.ticket.count({ where: baseWhere });
+        const openTickets = await prisma.ticket.count({ where: { status: { not: 'CERRADO' }, deleted_at: null } });
 
         // Tiempo promedio de resolución
         const closedTickets = await prisma.ticket.findMany({
-            where: { status: 'CERRADO', closed_at: { not: null }, ...periodWhere },
+            where: { status: 'CERRADO', closed_at: { not: null }, ...baseWhere },
             select: { created_at: true, closed_at: true }
         });
         const avgResolutionHours = closedTickets.length > 0
@@ -40,7 +65,7 @@ export async function GET(request) {
 
         // Tiempo promedio de primera respuesta (excluyendo mensajes automáticos del sistema donde author_id es null)
         const ticketsWithMessages = await prisma.ticket.findMany({
-            where: periodWhere,
+            where: baseWhere,
             select: {
                 created_at: true,
                 messages: {
@@ -60,13 +85,13 @@ export async function GET(request) {
         const byStatusRaw = await prisma.ticket.groupBy({
             by: ['status'],
             _count: true,
-            where: periodWhere
+            where: baseWhere
         });
         const byStatus = byStatusRaw.map(item => ({ status: item.status, count: item._count }));
 
         // 3. Tendencia diaria (tickets creados por día)
         const ticketDates = await prisma.ticket.findMany({
-            where: periodWhere,
+            where: baseWhere,
             select: { created_at: true },
             orderBy: { created_at: 'asc' }
         });
@@ -76,10 +101,11 @@ export async function GET(request) {
             trendMap[day] = (trendMap[day] || 0) + 1;
         });
         // Rellenar días faltantes con 0
-        if (periodStart) {
-            const current = new Date(periodStart);
-            const today = new Date();
-            while (current <= today) {
+        if (effectiveStart) {
+            const current = new Date(effectiveStart);
+            // Si hay date_to, usarlo como límite superior; si no, hoy
+            const endDate = dateTo ? new Date(dateTo) : new Date();
+            while (current <= endDate) {
                 const key = current.toISOString().split('T')[0];
                 if (!trendMap[key]) trendMap[key] = 0;
                 current.setDate(current.getDate() + 1);
@@ -95,10 +121,10 @@ export async function GET(request) {
 
         const agentStats = [];
         for (const agent of agents) {
-            const agentPeriodWhere = { assigned_to: agent.id, ...periodWhere };
+            const agentPeriodWhere = { assigned_to: agent.id, ...baseWhere };
 
             const assigned = await prisma.ticket.count({
-                where: { assigned_to: agent.id, status: { not: 'CERRADO' } }
+                where: { assigned_to: agent.id, status: { not: 'CERRADO' }, deleted_at: null }
             });
 
             const closed = await prisma.ticket.count({
@@ -144,7 +170,7 @@ export async function GET(request) {
         const byCategoryRaw = await prisma.ticket.groupBy({
             by: ['category_id'],
             _count: true,
-            where: periodWhere
+            where: baseWhere
         });
         const categories = await prisma.category.findMany();
         const byCategory = byCategoryRaw.map(item => ({
