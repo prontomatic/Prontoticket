@@ -217,6 +217,7 @@ export default function TicketDetailPage({ params }) {
   const fileInputRef = useRef(null);
   const [categories, setCategories] = useState([]);
   const [updatingCategory, setUpdatingCategory] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
 
   // Constantes de validación (deben coincidir con el backend)
   const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -245,6 +246,17 @@ export default function TicketDetailPage({ params }) {
       if (!currentSession) { router.push('/'); return; }
       setSession(currentSession);
       fetchTicket(currentSession.access_token);
+
+      // Cargar perfil del usuario (para obtener el rol real desde la BD)
+      try {
+        const profRes = await fetch('/api/profile', {
+          headers: { 'Authorization': `Bearer ${currentSession.access_token}` }
+        });
+        if (profRes.ok) {
+          setUserProfile(await profRes.json());
+        }
+      } catch (e) { /* silencio */ }
+
       // Cargar categorías activas para el selector
       try {
         const catRes = await fetch('/api/admin/categorias', {
@@ -379,6 +391,30 @@ export default function TicketDetailPage({ params }) {
     } catch (e) { toast.error('Error de red'); }
   };
 
+  const handleCambiarCategoria = async (value) => {
+    if (!session) return;
+    setUpdatingCategory(true);
+    const categoryId = value === 'none' ? null : parseInt(value, 10);
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}/categoria`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ category_id: categoryId })
+      });
+      if (res.ok) {
+        toast.success('Categoría actualizada');
+        fetchTicket(session.access_token);
+      } else {
+        const d = await res.json();
+        toast.error(d.error || 'Error al actualizar categoría');
+      }
+    } catch (e) { toast.error('Error de red'); }
+    finally { setUpdatingCategory(false); }
+  };
+
   const handleCambiarEstado = async (value) => {
     if (!session) return;
     try {
@@ -403,7 +439,8 @@ export default function TicketDetailPage({ params }) {
   if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#003F8A]" /></div>;
   if (!ticket) return <div className="min-h-screen bg-slate-50 flex p-8">No encontrado</div>;
 
-  const userRole = session?.user?.user_metadata?.role || 'AGENTE';
+  // El rol viene desde la tabla Profile via /api/profile, no desde user_metadata del token
+  const userRole = userProfile?.role || 'AGENTE';
   const userId = session?.user?.id;
   const isAssignedToMe = ticket.assigned_to === userId;
   const canRespond = (userRole === 'ADMINISTRADOR' || userRole === 'SUPERVISOR') || isAssignedToMe;
