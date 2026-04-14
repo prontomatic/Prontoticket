@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabaseClient } from '@/lib/supabase-client';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { LogOut, Ticket, Bell, Settings, User, BarChart3, Users, Tag, Mail, Shield } from 'lucide-react';
+import { LogOut, Ticket, Settings, User, BarChart3, Users, Tag, Mail, Shield, ChevronDown } from 'lucide-react';
+import { colors, shadows, radius, transitions, typography, roleConfig, stringToColor } from '@/lib/design-tokens';
 
 export default function Navbar() {
   const [user, setUser] = useState(null);
@@ -53,6 +53,8 @@ export default function Navbar() {
   if (!user) return null;
 
   const role = profile?.role;
+  const userInitial = (profile?.full_name?.[0] || user.email?.[0] || '?').toUpperCase();
+  const userAvatarColor = stringToColor(profile?.full_name || user.email);
 
   const allMenuItems = [
     { label: 'Mi Perfil', icon: User, path: '/perfil', roles: ['AGENTE', 'SUPERVISOR', 'ADMINISTRADOR'], group: 'personal' },
@@ -65,74 +67,98 @@ export default function Navbar() {
   ];
 
   const visibleItems = role ? allMenuItems.filter(item => item.roles.includes(role)) : [];
+  const roleStyle = role ? roleConfig[role] : null;
 
   return (
     <nav style={{
-      background: 'white',
-      borderBottom: '1px solid #E2E8F0',
+      background: colors.surface,
+      borderBottom: `1px solid ${colors.border}`,
       position: 'sticky',
       top: 0,
       zIndex: 50,
+      backdropFilter: 'saturate(180%) blur(8px)',
     }}>
       <div style={{
         maxWidth: '1600px',
         margin: '0 auto',
         padding: '0 2rem',
-        height: '56px',
+        height: '60px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
       }}>
         {/* Logo */}
         <div
-          style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
           onClick={() => window.location.href = '/dashboard'}
         >
           <div style={{
-            background: '#003F8A',
-            padding: '7px',
-            borderRadius: '10px',
+            background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.primaryDark} 100%)`,
+            padding: '8px',
+            borderRadius: radius.md,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            boxShadow: shadows.primarySoft,
+            position: 'relative',
           }}>
-            <Ticket style={{ width: '18px', height: '18px', color: '#FFD700' }} />
+            <Ticket style={{ width: '18px', height: '18px', color: colors.accent, strokeWidth: 2.5 }} />
           </div>
-          <span style={{ fontWeight: '800', fontSize: '17px', color: '#1A1A2E', letterSpacing: '-0.3px' }}>
-            Pronto<span style={{ color: '#003F8A' }}>Ticket</span>
+          <span style={{
+            fontWeight: typography.weight.extrabold,
+            fontSize: '18px',
+            color: colors.textPrimary,
+            letterSpacing: typography.trackingTight,
+          }}>
+            Pronto<span style={{ color: colors.primary }}>Ticket</span>
           </span>
         </div>
 
         {/* Acciones */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Button variant="ghost" size="icon" style={{ borderRadius: '50%', color: '#64748B' }}>
-            <Bell style={{ width: '18px', height: '18px' }} />
-          </Button>
-
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           {/* Menú desplegable del engranaje */}
           <div ref={menuRef} style={{ position: 'relative' }}>
-            <Button
-              variant="ghost"
-              size="icon"
-              style={{ borderRadius: '50%', color: menuOpen ? '#003F8A' : '#64748B', background: menuOpen ? '#E8F0FB' : 'transparent' }}
+            <button
               onClick={() => setMenuOpen(!menuOpen)}
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: radius.pill,
+                border: 'none',
+                background: menuOpen ? colors.primarySoft : 'transparent',
+                color: menuOpen ? colors.primary : colors.textMuted,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: transitions.base,
+              }}
+              onMouseEnter={e => { if (!menuOpen) { e.currentTarget.style.background = colors.surfaceAlt; } }}
+              onMouseLeave={e => { if (!menuOpen) { e.currentTarget.style.background = 'transparent'; } }}
             >
               <Settings style={{ width: '18px', height: '18px' }} />
-            </Button>
+            </button>
 
             {menuOpen && visibleItems.length > 0 && (
               <div style={{
                 position: 'absolute',
-                top: 'calc(100% + 6px)',
+                top: 'calc(100% + 8px)',
                 right: 0,
-                background: 'white',
-                border: '1px solid #E2E8F0',
-                borderRadius: '12px',
-                boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
-                minWidth: '200px',
+                background: colors.surface,
+                border: `1px solid ${colors.border}`,
+                borderRadius: radius.md,
+                boxShadow: shadows.lg,
+                minWidth: '220px',
                 padding: '6px',
                 zIndex: 100,
+                animation: 'dropdownFade 0.15s ease-out',
               }}>
+                <style>{`
+                  @keyframes dropdownFade {
+                    from { opacity: 0; transform: translateY(-4px); }
+                    to { opacity: 1; transform: translateY(0); }
+                  }
+                `}</style>
                 {visibleItems.map((item, idx) => {
                   const prevItem = visibleItems[idx - 1];
                   const showSeparator = prevItem && prevItem.group !== item.group;
@@ -140,7 +166,7 @@ export default function Navbar() {
                   return (
                     <div key={item.path}>
                       {showSeparator && (
-                        <div style={{ height: '1px', background: '#E2E8F0', margin: '4px 8px' }} />
+                        <div style={{ height: '1px', background: colors.borderSubtle, margin: '4px 8px' }} />
                       )}
                       <button
                         onClick={() => navigateTo(item.path)}
@@ -152,17 +178,18 @@ export default function Navbar() {
                           padding: '10px 12px',
                           border: 'none',
                           background: 'none',
-                          borderRadius: '8px',
+                          borderRadius: radius.sm,
                           cursor: 'pointer',
                           fontSize: '13px',
-                          fontWeight: '500',
-                          color: '#334155',
+                          fontWeight: typography.weight.medium,
+                          color: colors.textPrimary,
                           textAlign: 'left',
+                          transition: transitions.fast,
                         }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#F1F5F9'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                        onMouseEnter={e => { e.currentTarget.style.background = colors.surfaceAlt; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
                       >
-                        <item.icon style={{ width: '16px', height: '16px', color: '#64748B' }} />
+                        <item.icon style={{ width: '16px', height: '16px', color: colors.textMuted }} />
                         {item.label}
                       </button>
                     </div>
@@ -172,28 +199,75 @@ export default function Navbar() {
             )}
           </div>
 
-          <div style={{ width: '1px', height: '20px', background: '#E2E8F0', margin: '0 4px' }} />
-          <span style={{ fontSize: '13px', color: '#475569', fontWeight: '500' }}>
-            {user.email}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
+          <div style={{ width: '1px', height: '20px', background: colors.border, margin: '0 8px' }} />
+
+          {/* Info del usuario */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: radius.pill,
+              background: userAvatarColor,
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '13px',
+              fontWeight: typography.weight.bold,
+              boxShadow: shadows.xs,
+            }}>
+              {userInitial}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
+              <span style={{ fontSize: '13px', color: colors.textPrimary, fontWeight: typography.weight.semibold }}>
+                {profile?.full_name || user.email.split('@')[0]}
+              </span>
+              {roleStyle && (
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: typography.weight.bold,
+                  color: roleStyle.color,
+                  textTransform: 'uppercase',
+                  letterSpacing: typography.trackingWide,
+                  marginTop: '1px',
+                }}>
+                  {roleStyle.label}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <button
             onClick={handleLogout}
             style={{
-              borderColor: '#E2E8F0',
-              color: '#475569',
-              borderRadius: '999px',
-              padding: '0 14px',
+              marginLeft: '12px',
+              border: `1px solid ${colors.border}`,
+              background: colors.surface,
+              color: colors.textSecondary,
+              borderRadius: radius.pill,
+              padding: '7px 14px',
               fontSize: '13px',
+              fontWeight: typography.weight.semibold,
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
+              cursor: 'pointer',
+              transition: transitions.base,
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = colors.danger;
+              e.currentTarget.style.color = colors.danger;
+              e.currentTarget.style.background = colors.dangerSoft;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = colors.border;
+              e.currentTarget.style.color = colors.textSecondary;
+              e.currentTarget.style.background = colors.surface;
             }}
           >
             <LogOut style={{ width: '14px', height: '14px' }} />
             Salir
-          </Button>
+          </button>
         </div>
       </div>
     </nav>
