@@ -408,13 +408,15 @@ export default function TicketDetailPage({ params }) {
                   <div className={`flex w-full max-w-[85%] ${isAgent ? 'flex-row-reverse' : 'flex-row'}`}>
                      <Avatar className="w-10 h-10 border-2 border-white shadow-sm shrink-0">
                         <AvatarFallback className={`text-white font-bold ${isAgent ? 'bg-[#003F8A]' : 'bg-slate-400'}`}>
-                          {isAgent ? (msg.author?.full_name?.charAt(0) || 'A') : ticket.client_email.charAt(0).toUpperCase()}
+                          {isAgent
+                            ? (msg.author?.full_name?.charAt(0) || 'A')
+                            : (ticket.client_name?.charAt(0)?.toUpperCase() || ticket.client_email.charAt(0).toUpperCase())}
                         </AvatarFallback>
                      </Avatar>
                      <div className={`flex flex-col mx-4 ${isAgent ? 'items-end' : 'items-start'}`}>
                         <div className="flex items-baseline space-x-2 mb-1">
                           <span className="text-sm font-semibold text-slate-700">
-                             {isAgent ? msg.author?.full_name : ticket.client_email.split('@')[0]}
+                             {isAgent ? msg.author?.full_name : (ticket.client_name || ticket.client_email.split('@')[0])}
                           </span>
                           <span className="text-xs text-slate-400">
                              {format(new Date(msg.sent_at), "HH:mm • dd MMM", { locale: es })}
@@ -560,6 +562,12 @@ export default function TicketDetailPage({ params }) {
                 <UserCircle className="w-4 h-4 mr-2 text-slate-400" /> Información del Cliente
              </div>
              <div className="p-5 space-y-4 text-sm">
+               {ticket.client_name && (
+                 <div>
+                   <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Nombre</p>
+                   <p className="font-medium text-slate-900 truncate" title={ticket.client_name}>{ticket.client_name}</p>
+                 </div>
+               )}
                <div>
                  <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Email Remitente</p>
                  <p className="font-medium text-slate-900 truncate" title={ticket.client_email}>{ticket.client_email}</p>

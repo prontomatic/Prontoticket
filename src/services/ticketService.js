@@ -108,6 +108,7 @@ export async function createTicketFromWebhook(data) {
         content: data.body, // Convertido a Markdown
         status: 'ABIERTO',
         client_email: data.clientEmail,
+        client_name: data.clientName || null,
         client_rut,
         client_phone,
         client_address,
