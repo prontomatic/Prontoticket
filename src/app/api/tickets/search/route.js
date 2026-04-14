@@ -19,7 +19,7 @@ export async function GET(request) {
     return NextResponse.json([]);
   }
 
-  const where = { AND: [] };
+  const where = { AND: [{ deleted_at: null }] };
 
   // Búsqueda de texto en múltiples campos
   if (q.length >= 2) {

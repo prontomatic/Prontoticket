@@ -20,7 +20,7 @@ export async function GET(request) {
     orderBy: { updated_at: 'desc' }
   };
 
-  const where = {};
+  const where = { deleted_at: null };
   if (status) where.status = status;
   if (assigned_to) {
     where.assigned_to = assigned_to === 'unassigned' ? null : assigned_to;

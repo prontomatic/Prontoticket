@@ -10,8 +10,8 @@ export async function GET(request, context) {
   const ticketId = parseInt(id, 10);
 
   try {
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
+    const ticket = await prisma.ticket.findFirst({
+      where: { id: ticketId, deleted_at: null },
       include: {
         category: true,
         agent: { select: { full_name: true } },

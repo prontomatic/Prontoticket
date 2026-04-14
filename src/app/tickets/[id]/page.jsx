@@ -21,7 +21,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowLeft, Send, Paperclip, UserCircle, Briefcase, Phone, MapPin, CheckCircle2, LockIcon, Download, FileText, Image as ImageIcon, Video, AlertCircle, X, Plus } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, UserCircle, Briefcase, Phone, MapPin, CheckCircle2, LockIcon, Download, FileText, Image as ImageIcon, Video, AlertCircle, X, Plus, Trash2 } from 'lucide-react';
 
 const statusColors = {
   ABIERTO: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -215,6 +215,8 @@ export default function TicketDetailPage({ params }) {
   const [nuevoEstado, setNuevoEstado] = useState('EN_ESPERA_CLIENTE');
   const [attachedFiles, setAttachedFiles] = useState([]);
   const fileInputRef = useRef(null);
+  const [categories, setCategories] = useState([]);
+  const [updatingCategory, setUpdatingCategory] = useState(false);
 
   // Constantes de validación (deben coincidir con el backend)
   const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -243,6 +245,16 @@ export default function TicketDetailPage({ params }) {
       if (!currentSession) { router.push('/'); return; }
       setSession(currentSession);
       fetchTicket(currentSession.access_token);
+      // Cargar categorías activas para el selector
+      try {
+        const catRes = await fetch('/api/admin/categorias', {
+          headers: { 'Authorization': `Bearer ${currentSession.access_token}` }
+        });
+        if (catRes.ok) {
+          const cats = await catRes.json();
+          setCategories(cats.filter(c => c.is_active));
+        }
+      } catch (e) { /* silencio */ }
     };
     init();
   }, [ticketId, router]);
@@ -345,6 +357,28 @@ export default function TicketDetailPage({ params }) {
     finally { setSubmitting(false); }
   };
 
+  const handleEliminarTicket = async () => {
+    if (!session) return;
+    const confirmed = window.confirm(
+      `¿Eliminar el ticket #${ticketId}?\n\nEsta acción marcará el ticket como eliminado y dejará de aparecer en el dashboard, búsquedas y métricas.\n\nAsunto: ${ticket.subject}\nCliente: ${ticket.client_name || ticket.client_email}`
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}/eliminar`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${session.access_token}` }
+      });
+      if (res.ok) {
+        toast.success(`Ticket #${ticketId} eliminado`);
+        router.push('/dashboard');
+      } else {
+        const d = await res.json();
+        toast.error(d.error || 'Error al eliminar ticket');
+      }
+    } catch (e) { toast.error('Error de red'); }
+  };
+
   const handleCambiarEstado = async (value) => {
     if (!session) return;
     try {
@@ -373,6 +407,7 @@ export default function TicketDetailPage({ params }) {
   const userId = session?.user?.id;
   const isAssignedToMe = ticket.assigned_to === userId;
   const canRespond = (userRole === 'ADMINISTRADOR' || userRole === 'SUPERVISOR') || isAssignedToMe;
+  const canDelete = userRole === 'ADMINISTRADOR' || userRole === 'SUPERVISOR';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -394,9 +429,20 @@ export default function TicketDetailPage({ params }) {
                   </h1>
                   <p className="text-sm text-slate-500 mt-2 font-medium">Ticket #{ticket.id} • Creado el {format(new Date(ticket.created_at), "dd 'de' MMMM, yyyy HH:mm", { locale: es })}</p>
                </div>
-               <Badge className={`px-3 py-1 text-sm font-bold shadow-sm ${statusColors[ticket.status]}`}>
-                 {ticket.status.replace(/_/g, ' ')}
-               </Badge>
+               <div className="flex items-center gap-2">
+                 <Badge className={`px-3 py-1 text-sm font-bold shadow-sm ${statusColors[ticket.status]}`}>
+                   {ticket.status.replace(/_/g, ' ')}
+                 </Badge>
+                 {canDelete && (
+                   <button
+                     onClick={handleEliminarTicket}
+                     title="Eliminar ticket"
+                     className="flex items-center justify-center w-8 h-8 rounded-lg border border-red-200 bg-white hover:bg-red-50 text-red-600 transition-colors"
+                   >
+                     <Trash2 className="w-4 h-4" />
+                   </button>
+                 )}
+               </div>
              </div>
           </div>
 
@@ -636,10 +682,28 @@ export default function TicketDetailPage({ params }) {
                 </div>
                 <div>
                    <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Categoría</p>
-                   {ticket.category ? (
-                     <Badge variant="outline" className="font-medium text-slate-700 bg-slate-50">{ticket.category.name}</Badge>
+                   {canRespond ? (
+                     <Select
+                       value={ticket.category_id ? String(ticket.category_id) : 'none'}
+                       onValueChange={handleCambiarCategoria}
+                       disabled={updatingCategory}
+                     >
+                       <SelectTrigger className="w-full h-8 text-xs font-medium rounded-md border-slate-300 bg-white">
+                         <SelectValue placeholder="Seleccionar categoría..." />
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="none">Sin categoría</SelectItem>
+                         {categories.map(cat => (
+                           <SelectItem key={cat.id} value={String(cat.id)}>{cat.name}</SelectItem>
+                         ))}
+                       </SelectContent>
+                     </Select>
                    ) : (
-                     <span className="text-slate-500 italic">No clasificado</span>
+                     ticket.category ? (
+                       <Badge variant="outline" className="font-medium text-slate-700 bg-slate-50">{ticket.category.name}</Badge>
+                     ) : (
+                       <span className="text-slate-500 italic">No clasificado</span>
+                     )
                    )}
                 </div>
              </div>
