@@ -362,7 +362,7 @@ export default function DashboardPage() {
                           {ticket.subject}
                         </p>
                         <p style={{ fontSize: '12px', color: '#64748B', margin: 0 }}>
-                          {ticket.client_email}
+                          {ticket.client_name ? `${ticket.client_name} · ${ticket.client_email}` : ticket.client_email}
                           {ticket.agent && <span> · Asignado a {ticket.agent.full_name}</span>}
                         </p>
                       </div>
@@ -508,9 +508,11 @@ export default function DashboardPage() {
                       </p>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '11px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <User style={{ width: '11px', height: '11px' }} />
-                          {ticket.client_email.split('@')[0]}
+                        <span style={{ fontSize: '11px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0, flex: 1, marginRight: '8px' }}>
+                          <User style={{ width: '11px', height: '11px', flexShrink: 0 }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {ticket.client_name || ticket.client_email.split('@')[0]}
+                          </span>
                         </span>
                         {ticket.agent ? (
                           <span style={{

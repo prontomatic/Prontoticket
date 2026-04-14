@@ -61,6 +61,7 @@ model Ticket {
   content              String
   status               TicketStatus @default(ABIERTO)
   client_email         String
+  client_name          String?
   client_rut           String?
   client_phone         String?
   client_address       String?
