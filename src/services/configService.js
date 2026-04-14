@@ -8,6 +8,10 @@ const DEFAULTS = {
   'cierre_auto_horas': { value: '48', description: 'Horas sin respuesta del cliente antes del cierre automático' },
   'csat_survey_url': { value: 'https://forms.gle/placeholder', description: 'URL del formulario de encuesta de satisfacción (CSAT)' },
   'spam_threshold': { value: '70', description: 'Umbral de puntuación para filtrar correos como spam (Estricto: 50, Normal: 70, Permisivo: 100)' },
+  'auto_send_acuse_recibo': { value: 'true', description: 'Enviar acuse de recibo automáticamente al cliente cuando se crea un nuevo ticket' },
+  'auto_send_aviso_cortesia': { value: 'true', description: 'Enviar aviso de cortesía al cliente después de N horas sin respuesta' },
+  'auto_send_cierre_automatico': { value: 'true', description: 'Enviar notificación al cliente cuando un ticket se cierra automáticamente' },
+  'auto_send_csat': { value: 'true', description: 'Enviar encuesta de satisfacción al cliente cuando se cierra un ticket (manual o automático)' },
 };
 
 /**
