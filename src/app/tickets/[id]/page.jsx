@@ -230,6 +230,12 @@ export default function TicketDetailPage({ params }) {
       });
       if (res.ok) {
         setTicket(await res.json());
+
+        // Marcar el ticket como visto por el usuario actual (silencioso, sin bloquear UI)
+        fetch(`/api/tickets/${ticketId}/marcar-visto`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${access_token}` }
+        }).catch(err => console.warn('No se pudo marcar como visto:', err));
       } else {
         toast.error('Error cargando ticket');
       }

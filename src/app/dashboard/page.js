@@ -23,13 +23,6 @@ const STATUS_LABELS = {
   CERRADO: 'Cerrados',
 };
 
-// Detecta si un ticket es "nuevo" (creado en las últimas 4 horas) para destacarlo
-function isNewTicket(ticket) {
-  const created = new Date(ticket.created_at);
-  const hoursAgo = (Date.now() - created.getTime()) / (1000 * 60 * 60);
-  return hoursAgo < 4;
-}
-
 export default function DashboardPage() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -444,7 +437,7 @@ export default function DashboardPage() {
                       gap: '10px',
                     }}>
                       {colTickets.map(ticket => {
-                        const isNew = isNewTicket(ticket);
+                        const isNew = ticket.is_unread === true;
                         const clientDisplayName = ticket.client_name || ticket.client_email.split('@')[0];
                         const agentAvatarColor = ticket.agent ? stringToColor(ticket.agent.full_name) : null;
                         return (

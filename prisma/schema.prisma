@@ -43,6 +43,7 @@ model Profile {
   tickets        Ticket[]        @relation("AssignedAgent")
   messages       Message[]       @relation("MessageAuthor")
   status_changes StatusHistory[] @relation("ChangedByAgent")
+  ticket_views   TicketView[]    @relation("UserTicketViews")
 }
 
 model Category {
@@ -79,6 +80,7 @@ model Ticket {
   agent                Profile?     @relation("AssignedAgent", fields: [assigned_to], references: [id])
   messages             Message[]
   status_history       StatusHistory[]
+  views                TicketView[] @relation("TicketViews")
 }
 
 model Message {
@@ -162,4 +164,18 @@ model FilteredEmail {
 
   @@index([filtered_at])
   @@index([from_email])
+}
+
+model TicketView {
+  user_id    String
+  ticket_id  Int
+  viewed_at  DateTime @default(now()) @updatedAt
+
+  // Relations
+  user       Profile  @relation("UserTicketViews", fields: [user_id], references: [id])
+  ticket     Ticket   @relation("TicketViews", fields: [ticket_id], references: [id])
+
+  @@id([user_id, ticket_id])
+  @@index([ticket_id])
+  @@index([user_id])
 }
