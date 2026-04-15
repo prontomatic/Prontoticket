@@ -21,7 +21,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowLeft, Send, Paperclip, UserCircle, Briefcase, Phone, MapPin, CheckCircle2, LockIcon, Download, FileText, Image as ImageIcon, Video, AlertCircle, X, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, UserCircle, Briefcase, Phone, MapPin, CheckCircle2, LockIcon, Download, FileText, Image as ImageIcon, Video, AlertCircle, X, Plus, Trash2, ShieldAlert } from 'lucide-react';
 
 const statusColors = {
   ABIERTO: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -391,6 +391,28 @@ export default function TicketDetailPage({ params }) {
     } catch (e) { toast.error('Error de red'); }
   };
 
+  const handleMarcarSpam = async () => {
+    if (!session) return;
+    const confirmed = window.confirm(
+      `¿Marcar el ticket #${ticketId} como spam?\n\nEl ticket se moverá al panel de Correos Filtrados y desaparecerá del dashboard.\n\nAsunto: ${ticket.subject}\nCliente: ${ticket.client_name || ticket.client_email}`
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}/marcar-spam`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session.access_token}` }
+      });
+      if (res.ok) {
+        toast.success(`Ticket #${ticketId} marcado como spam`);
+        router.push('/dashboard');
+      } else {
+        const d = await res.json();
+        toast.error(d.error || 'Error al marcar como spam');
+      }
+    } catch (e) { toast.error('Error de red'); }
+  };
+
   const handleCambiarCategoria = async (value) => {
     if (!session) return;
     setUpdatingCategory(true);
@@ -471,13 +493,22 @@ export default function TicketDetailPage({ params }) {
                    {ticket.status.replace(/_/g, ' ')}
                  </Badge>
                  {canDelete && (
-                   <button
-                     onClick={handleEliminarTicket}
-                     title="Eliminar ticket"
-                     className="flex items-center justify-center w-8 h-8 rounded-lg border border-red-200 bg-white hover:bg-red-50 text-red-600 transition-colors"
-                   >
-                     <Trash2 className="w-4 h-4" />
-                   </button>
+                   <>
+                     <button
+                       onClick={handleMarcarSpam}
+                       title="Marcar como spam"
+                       className="flex items-center justify-center w-8 h-8 rounded-lg border border-amber-200 bg-white hover:bg-amber-50 text-amber-600 transition-colors"
+                     >
+                       <ShieldAlert className="w-4 h-4" />
+                     </button>
+                     <button
+                       onClick={handleEliminarTicket}
+                       title="Eliminar ticket"
+                       className="flex items-center justify-center w-8 h-8 rounded-lg border border-red-200 bg-white hover:bg-red-50 text-red-600 transition-colors"
+                     >
+                       <Trash2 className="w-4 h-4" />
+                     </button>
+                   </>
                  )}
                </div>
              </div>
