@@ -77,6 +77,57 @@ const MARKETING_KEYWORDS = [
   'newsletter',
   'boletín',
   'boletin',
+  // Nuevas palabras basadas en casos reales detectados
+  'contabilidad para',
+  'no contadores',
+  'aprenda con',
+  'capacítese',
+  'capacitese',
+  'express delivery',
+  'door-to-door',
+  'door to door',
+  'freight',
+  'shipping service',
+  'shipping agent',
+  'air sea',
+  'sea freight',
+  'forwarder',
+  'generate ai',
+  'ai content',
+  'dale clic',
+  'haz clic aquí',
+  'click here',
+  'oferta especial',
+  'plan gratuito',
+  'prueba gratis',
+  'free plan',
+  'free trial',
+  'unsubscribe',
+  'dar de baja',
+];
+
+// Patrones de "marcado por servidor externo" — señal muy fuerte de spam
+// Cuando el servidor de correo de Prontomatic (o intermedios) marca un correo como spam,
+// suele agregar esto al inicio del asunto. Es una señal casi segura.
+const SERVER_SPAM_MARKERS = [
+  /^\*{2,}\s*spam\s*\*{2,}/i,        // ***SPAM*** o **SPAM**
+  /^\[\s*spam\s*\]/i,                  // [SPAM]
+  /^\{\s*spam\s*\}/i,                  // {SPAM}
+  /^\*{2,}\s*sospechoso\s*\*{2,}/i,   // ***SOSPECHOSO***
+  /^\[\s*sospechoso\s*\]/i,            // [SOSPECHOSO]
+  /^\*{2,}\s*phishing\s*\*{2,}/i,     // ***PHISHING***
+];
+
+// Dominios genéricos frecuentes en spam comercial disfrazado
+// Nota: estos solo suman si el remitente no tiene nombre legible (suele ser genérico)
+const SUSPICIOUS_TLDS = [
+  '.info',
+  '.biz',
+  '.click',
+  '.top',
+  '.live',
+  '.online',
+  '.xyz',
 ];
 
 // Asuntos típicos de respuestas automáticas y bounces
@@ -137,6 +188,16 @@ export async function analyzeEmail(emailData) {
 
   let score = 0;
   const reasons = [];
+
+  // 0. Marcador de spam del servidor externo (máxima prioridad — +100 puntos)
+  // Si el servidor de correo ya lo marcó, confiamos en esa señal
+  for (const marker of SERVER_SPAM_MARKERS) {
+    if (marker.test(subject || '')) {
+      score += 100;
+      reasons.push('Marcado como spam por el servidor de correo');
+      break;
+    }
+  }
 
   // 1. Headers muy confiables (100 puntos cada uno)
   const autoSubmitted = getHeader(headersString, 'Auto-Submitted');
@@ -218,19 +279,50 @@ export async function analyzeEmail(emailData) {
     }
   }
 
-  // 7. Palabras clave de marketing (30 puntos cada una, máximo 60 puntos sumados por este factor)
+  // 7. Palabras clave de marketing en el asunto (30 puntos cada una, máximo 90 puntos)
   let marketingScore = 0;
   const matchedKeywords = [];
   for (const keyword of MARKETING_KEYWORDS) {
     if (subjectLower.includes(keyword)) {
       marketingScore += 30;
       matchedKeywords.push(keyword);
-      if (marketingScore >= 60) break; // Tope para no sobre-contar
+      if (marketingScore >= 90) break; // Tope subido a 90 (3 palabras)
     }
   }
   if (marketingScore > 0) {
     score += marketingScore;
     reasons.push(`Palabras clave de marketing en asunto: ${matchedKeywords.join(', ')}`);
+  }
+
+  // 8. Palabras clave de marketing en el CUERPO (15 puntos cada una, máximo 45 puntos)
+  // Sumamos menos peso que en el asunto porque el cuerpo tiene más texto y más probabilidad de falsos positivos
+  const bodyLower = (body || '').toLowerCase();
+  let bodyMarketingScore = 0;
+  const matchedBodyKeywords = [];
+  for (const keyword of MARKETING_KEYWORDS) {
+    if (bodyLower.includes(keyword)) {
+      bodyMarketingScore += 15;
+      matchedBodyKeywords.push(keyword);
+      if (bodyMarketingScore >= 45) break;
+    }
+  }
+  if (bodyMarketingScore > 0) {
+    score += bodyMarketingScore;
+    reasons.push(`Palabras clave de marketing en cuerpo: ${matchedBodyKeywords.join(', ')}`);
+  }
+
+  // 9. TLD sospechoso + remitente genérico (30 puntos)
+  // Si el dominio termina en .info/.biz/.click/etc. Y el usuario antes del @ es genérico
+  // (info@, contact@, sales@, admin@, etc.) es señal de spam comercial disfrazado
+  const genericUserPatterns = ['info', 'contact', 'contacto', 'sales', 'ventas', 'admin', 'office', 'hello', 'hola', 'team', 'equipo', 'support', 'soporte'];
+  const userPart = fromEmail.includes('@') ? fromEmail.split('@')[0] : '';
+  const isGenericUser = genericUserPatterns.some(p => userPart === p || userPart.startsWith(p + '.') || userPart.startsWith(p + '_'));
+  for (const tld of SUSPICIOUS_TLDS) {
+    if (fromDomain.endsWith(tld) && isGenericUser) {
+      score += 30;
+      reasons.push(`TLD sospechoso (${tld}) con remitente genérico (${userPart})`);
+      break;
+    }
   }
 
   // Leer umbral desde configuración del sistema (fallback al default)

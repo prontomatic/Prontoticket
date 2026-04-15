@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifySendGridSignature } from '@/lib/sendgrid-webhook';
-import { htmlToMarkdown } from '@/services/emailService';
+import { htmlToMarkdown, stripQuotedContent } from '@/services/emailService';
 import { createTicketFromWebhook, appendInboundMessage } from '@/services/ticketService';
 import { analyzeEmail, logFilteredEmail } from '@/services/spamFilterService';
 import { prisma } from '@/lib/prisma';
@@ -145,9 +145,12 @@ export async function POST(request) {
         }
     }
 
+    // Si es respuesta a ticket existente, limpiar historial citado del cuerpo
+    const finalBody = targetTicketId ? stripQuotedContent(bodyMarkdown) : bodyMarkdown;
+
     const payload = {
         subject,
-        body: bodyMarkdown,
+        body: finalBody,
         clientEmail,
         clientName,
         messageId,
