@@ -18,14 +18,22 @@ export function htmlToMarkdown(html) {
   if (!html) return '';
 
   // Pre-limpieza del HTML ANTES de Turndown:
-  // 1. Eliminar comentarios HTML (incluye bloques CSS gigantes de Outlook/Word)
-  //    Ej: <!-- /* Font Definitions */ @font-face {...} /* Style Definitions */ ... -->
-  // 2. Eliminar tags <style> y su contenido (Outlook a veces los mete fuera de comentarios)
-  // 3. Eliminar tags <o:p> de Office (párrafos vacíos de Word)
+  // Los correos de Outlook/Word traen bloques CSS enormes dentro de comentarios HTML
+  // y conditional comments. Turndown no los elimina y terminan como texto visible.
   let cleanHtml = html
-    .replace(/<!--[\s\S]*?-->/g, '')
+    // 1. Conditional comments de Outlook: <!--[if ...]>...<![endif]-->
+    .replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, '')
+    // 2. Comentarios HTML normales Y malformados (cierre --> o -> o --->)
+    .replace(/<!--[\s\S]*?-{1,2}>/g, '')
+    // 3. Tags <style> y su contenido
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<o:p[^>]*>[\s\S]*?<\/o:p>/gi, '');
+    // 4. Tags de Office: <o:p>, <o:OfficeDocumentSettings>, etc.
+    .replace(/<o:[^>]*>[\s\S]*?<\/o:[^>]*>/gi, '')
+    .replace(/<o:[^>]*\/>/gi, '')
+    // 5. Atributos MSO en tags restantes (no elimina el tag, solo los atributos mso-*)
+    .replace(/\s*mso-[^;"]*;?/gi, '')
+    // 6. Tags <meta> de Word
+    .replace(/<meta[^>]*name="?Generator"?[^>]*>/gi, '');
 
   const markdown = turndown.turndown(cleanHtml);
 
