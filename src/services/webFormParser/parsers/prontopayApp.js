@@ -118,6 +118,11 @@ export const prontopayAppParser = {
     // (no solo en líneas propias — a veces están inline con otros campos)
     rawBody = rawBody.replace(/\[\/?group[^\]]*\]/gi, '');
 
+    // PASO 4b: Los tags [group] dejaron un hueco; si hay otro campo-label después
+    // en la misma línea, separarlo con un salto de línea.
+    // Ej: "Problema con lavadora  Número de tarjeta:" → dos líneas separadas
+    rawBody = rawBody.replace(/\s{2,}((?:De|Rut|Tel.{0,2}fono|Email|Edificio|Raz.{0,2}n\s+de\s+contacto|N.{0,2}mero\s+de\s+tarjeta|Mensaje)\s*:)/gi, '\n$1');
+
     // PASO 5: Normalizar acentos corruptos
     // .{0,2} cubre: 0 chars (sin acento), 1 char (é, ó, ú, ñ, o ó), 2 chars (Ã©, Ã³)
     rawBody = rawBody
