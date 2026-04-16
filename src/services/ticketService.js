@@ -70,32 +70,38 @@ export async function createTicketFromWebhook(data) {
     }
   }
 
-  // Enriquecer datos con DB Legacy MySQL
-  const legacyData = await fetchLegacyCustomerData(data.clientEmail);
-  
+  // Inicializar campos del cliente. Si vienen en `data` (ej: desde formulario web parseado),
+  // se usan como valores base. Si no vienen, quedan en null y se intenta enriquecer con legacy.
   let enrichmentNote = null;
-  let client_rut = null;
-  let client_phone = null;
-  let client_address = null;
+  let client_rut = data.clientRut || null;
+  let client_phone = data.clientPhone || null;
+  let client_address = data.clientAddress || null;
 
-  if (legacyData && legacyData.error) {
-    enrichmentNote = "Error al consultar base de datos de clientes. Datos de contacto no disponibles.";
-  } else if (!legacyData) {
-    enrichmentNote = "Cliente no encontrado en la base de datos. RUT, Teléfono y Dirección no disponibles.";
-  } else {
-    // legacyData returned successfully
-    client_rut = legacyData.rut;
-    client_phone = legacyData.phone;
-    client_address = legacyData.address;
-    
-    // Si algún campo quedó vacío
-    let missing = [];
-    if (!client_rut) missing.push("RUT");
-    if (!client_phone) missing.push("Teléfono");
-    if (!client_address) missing.push("Dirección");
-    
-    if (missing.length > 0) {
-      enrichmentNote = `Cliente encontrado, pero no se encontraron los siguientes campos: ${missing.join(', ')}.`;
+  // Consultar DB Legacy MySQL SOLO si no se está saltando explícitamente.
+  // Los formularios web pasan skipLegacyLookup=true porque traen datos frescos del cliente,
+  // y consultar legacy generaría un "enrichmentNote" engañoso en esos casos.
+  if (!data.skipLegacyLookup) {
+    const legacyData = await fetchLegacyCustomerData(data.clientEmail);
+
+    if (legacyData && legacyData.error) {
+      enrichmentNote = "Error al consultar base de datos de clientes. Datos de contacto no disponibles.";
+    } else if (!legacyData) {
+      enrichmentNote = "Cliente no encontrado en la base de datos. RUT, Teléfono y Dirección no disponibles.";
+    } else {
+      // legacyData returned successfully
+      client_rut = legacyData.rut;
+      client_phone = legacyData.phone;
+      client_address = legacyData.address;
+
+      // Si algún campo quedó vacío
+      let missing = [];
+      if (!client_rut) missing.push("RUT");
+      if (!client_phone) missing.push("Teléfono");
+      if (!client_address) missing.push("Dirección");
+
+      if (missing.length > 0) {
+        enrichmentNote = `Cliente encontrado, pero no se encontraron los siguientes campos: ${missing.join(', ')}.`;
+      }
     }
   }
 
