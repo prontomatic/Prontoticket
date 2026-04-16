@@ -49,12 +49,17 @@ export const prontopayAppParser = {
     const senderMatches = fromLower.includes(INTERNAL_INBOX);
 
     // Estructura mínima: campos "De:" y "Mensaje:" presentes
+    // Tolerante a encoding corrupto en acentos (aunque estos dos labels no tienen,
+    // dejamos el patrón robusto por consistencia)
     const hasDe = /^\s*\*{0,2}\s*De\s*\*{0,2}\s*:/im.test(body || '');
     const hasMensaje = /^\s*\*{0,2}\s*Mensaje\s*\*{0,2}\s*:/im.test(body || '');
-    const structureMatches = hasDe && hasMensaje;
+    // Señal adicional: presencia de campos con acentos (Teléfono, Razón, Número)
+    // Usamos versiones sin acento con comodín para tolerar encoding roto
+    const hasFormFields = /^\s*\*{0,2}\s*(?:Tel.fono|Raz.n\s+de\s+contacto|Email|Rut|Edificio)\s*\*{0,2}\s*:/im.test(body || '');
+    const structureMatches = hasDe && hasMensaje && hasFormFields;
 
-    // Patrón del asunto (señal complementaria, no bloqueante)
-    const subjectMatches = /Prontomatic\s*«.+»/i.test(subject || '');
+    // Patrón del asunto — tolerar comillas tipográficas «» o encoding corrupto de las mismas
+    const subjectMatches = /Prontomatic\s*[«\u00ab\uFFFD].+[»\u00bb\uFFFD]/i.test(subject || '');
 
     if (senderMatches && structureMatches) {
       if (!subjectMatches) {

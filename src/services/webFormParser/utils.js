@@ -15,20 +15,70 @@ function normalizeLabel(label) {
 }
 
 /**
+ * Mapa de caracteres acentuados a patrones regex tolerantes.
+ * Cada acento se reemplaza por un grupo que acepta:
+ *   - El carácter correcto (con acento)
+ *   - La versión sin acento
+ *   - U+FFFD (replacement character, aparece como ``)
+ *   - Cualquier byte no-ASCII suelto (por si la corrupción produce otro carácter)
+ *
+ * Esto protege contra variaciones de encoding sin importar qué carácter basura
+ * produce la corrupción.
+ */
+const ACCENT_MAP = {
+  'á': '[aá\u00e1\uFFFD\\x80-\\xFF]',
+  'é': '[eé\u00e9\uFFFD\\x80-\\xFF]',
+  'í': '[ií\u00ed\uFFFD\\x80-\\xFF]',
+  'ó': '[oó\u00f3\uFFFD\\x80-\\xFF]',
+  'ú': '[uú\u00fa\uFFFD\\x80-\\xFF]',
+  'ñ': '[nñ\u00f1\uFFFD\\x80-\\xFF]',
+  'Á': '[AÁ\u00c1\uFFFD\\x80-\\xFF]',
+  'É': '[EÉ\u00c9\uFFFD\\x80-\\xFF]',
+  'Í': '[IÍ\u00cd\uFFFD\\x80-\\xFF]',
+  'Ó': '[OÓ\u00d3\uFFFD\\x80-\\xFF]',
+  'Ú': '[UÚ\u00da\uFFFD\\x80-\\xFF]',
+  'Ñ': '[NÑ\u00d1\uFFFD\\x80-\\xFF]',
+};
+
+/**
+ * Convierte un label a un patrón regex tolerante a encoding corrupto.
+ * Ej: "Teléfono" → "Tel[eé\uFFFD...]fono"
+ *     "Razón de contacto" → "Raz[oó\uFFFD...]n\\s+de\\s+contacto"
+ *
+ * @param {string} label
+ * @returns {string} Patrón regex (string, no RegExp)
+ */
+function makeAccentTolerant(label) {
+  let result = '';
+  for (const char of label) {
+    if (ACCENT_MAP[char]) {
+      result += ACCENT_MAP[char];
+    } else {
+      result += char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+  }
+  // Hacer espacios flexibles
+  result = result.replace(/\s+/g, '\\s+');
+  return result;
+}
+
+/**
  * Elimina los tags [group ...] / [/group] del body.
  * Estos tags aparecen en los emails de formularios web pero no aportan información.
+ * Soporta tanto brackets normales [group] como escapados por Turndown \[group\].
  */
 export function cleanGroupTags(body) {
   if (!body) return '';
   return body
-    .replace(/^\s*\[\/?group[^\]]*\]\s*$/gim, '')
+    .replace(/^\s*\\?\[\/?group[^\]\n]*\\?\]\s*$/gim, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
 /**
  * Extrae el valor de un campo "Label: valor" (una sola línea) de un body.
- * Case-insensitive. Tolerante a espacios y a markdown bold.
+ * Case-insensitive. Tolerante a espacios, markdown bold, y encoding corrupto
+ * (acentos rotos que llegan como `` o bytes no-ASCII).
  *
  * @param {string} body
  * @param {string} label - Ej: "Rut", "Teléfono", "Razón de contacto"
@@ -37,11 +87,11 @@ export function cleanGroupTags(body) {
 export function extractField(body, label) {
   if (!body || !label) return null;
 
-  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const flexibleLabel = escapedLabel.replace(/\s+/g, '\\s+');
+  // Usar patrón tolerante a encoding corrupto en los acentos
+  const tolerantLabel = makeAccentTolerant(label);
 
   const regex = new RegExp(
-    `^\\s*\\*{0,2}\\s*${flexibleLabel}\\s*\\*{0,2}\\s*:\\s*(.*?)\\s*$`,
+    `^\\s*\\*{0,2}\\s*${tolerantLabel}\\s*\\*{0,2}\\s*:\\s*(.*?)\\s*$`,
     'im'
   );
   const match = body.match(regex);
@@ -63,11 +113,11 @@ export function extractField(body, label) {
 export function extractBlockAfterLabel(body, label, nextLabels = []) {
   if (!body || !label) return null;
 
-  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const flexibleLabel = escapedLabel.replace(/\s+/g, '\\s+');
+  // Usar patrón tolerante a encoding corrupto en los acentos
+  const tolerantLabel = makeAccentTolerant(label);
 
   const labelRegex = new RegExp(
-    `^\\s*\\*{0,2}\\s*${flexibleLabel}\\s*\\*{0,2}\\s*:\\s*`,
+    `^\\s*\\*{0,2}\\s*${tolerantLabel}\\s*\\*{0,2}\\s*:\\s*`,
     'im'
   );
   const labelMatch = body.match(labelRegex);
@@ -77,10 +127,9 @@ export function extractBlockAfterLabel(body, label, nextLabels = []) {
   let endIdx = body.length;
 
   for (const nextLabel of nextLabels) {
-    const escaped = nextLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const flexibleNext = escaped.replace(/\s+/g, '\\s+');
+    const tolerantNext = makeAccentTolerant(nextLabel);
     const regex = new RegExp(
-      `^\\s*\\*{0,2}\\s*${flexibleNext}\\s*\\*{0,2}\\s*:`,
+      `^\\s*\\*{0,2}\\s*${tolerantNext}\\s*\\*{0,2}\\s*:`,
       'im'
     );
     const substr = body.substring(startIdx);
@@ -160,8 +209,9 @@ export function detectExtraFields(body, coreLabels) {
   // Construir set normalizado de labels core para comparación
   const normalizedCore = new Set(coreLabels.map(normalizeLabel));
 
-  // Limitar búsqueda a la parte anterior a "Mensaje:"
-  const mensajeMatch = body.match(/^\s*\*{0,2}\s*Mensaje\s*\*{0,2}\s*:/im);
+  // Limitar búsqueda a la parte anterior a "Mensaje:" (tolerante a encoding corrupto)
+  const mensajePattern = makeAccentTolerant('Mensaje');
+  const mensajeMatch = body.match(new RegExp(`^\\s*\\*{0,2}\\s*${mensajePattern}\\s*\\*{0,2}\\s*:`, 'im'));
   const searchArea =
     mensajeMatch && typeof mensajeMatch.index === 'number'
       ? body.substring(0, mensajeMatch.index)
