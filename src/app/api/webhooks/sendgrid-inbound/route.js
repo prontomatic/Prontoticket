@@ -3,6 +3,7 @@ import { verifySendGridSignature } from '@/lib/sendgrid-webhook';
 import { htmlToMarkdown, stripQuotedContent } from '@/services/emailService';
 import { createTicketFromWebhook, appendInboundMessage } from '@/services/ticketService';
 import { analyzeEmail, logFilteredEmail } from '@/services/spamFilterService';
+import { detectAndParse } from '@/services/webFormParser';
 import { prisma } from '@/lib/prisma';
 
 // Función auxiliar para extraer correo de un string "Nombre <correo@df.com>"
@@ -105,10 +106,18 @@ export async function POST(request) {
       }
     }
 
-    // Filtrado de spam / correos automáticos
-    // Solo aplica para correos nuevos (NO para respuestas a tickets existentes).
-    // Esto evita perder respuestas legítimas de clientes cuyo asunto/firma active el filtro por error.
+    // Detección de formulario web (solo para tickets nuevos).
+    // Si el correo viene de un formulario web conocido, NO pasa por el filtro de spam
+    // porque por definición es un correo legítimo del sistema.
+    let webFormResult = { isWebForm: false };
     if (!targetTicketId) {
+      webFormResult = detectAndParse({ from, subject, body: bodyMarkdown });
+    }
+
+    // Filtrado de spam / correos automáticos
+    // Solo aplica para correos nuevos que NO sean respuestas a tickets existentes ni formularios web.
+    // Esto evita perder respuestas legítimas de clientes cuyo asunto/firma active el filtro por error.
+    if (!targetTicketId && !webFormResult.isWebForm) {
       const analysis = analyzeEmail({
         from,
         subject,
@@ -148,14 +157,34 @@ export async function POST(request) {
     // Si es respuesta a ticket existente, limpiar historial citado del cuerpo
     const finalBody = targetTicketId ? stripQuotedContent(bodyMarkdown) : bodyMarkdown;
 
-    const payload = {
-        subject,
-        body: finalBody,
-        clientEmail,
-        clientName,
+    let payload;
+    if (webFormResult.isWebForm) {
+      // Formulario web: usar datos parseados del formulario.
+      // Si algún campo crítico falló en la extracción, fallback al valor del header del correo.
+      // (ej: si clientEmail del parser es null, queda contacto@prontomatic.cl — y la advertencia
+      // visible en el body alerta al agente de que hay que completar manualmente.)
+      payload = {
+        subject: webFormResult.subject || subject,
+        body: webFormResult.body || finalBody,
+        clientEmail: webFormResult.clientEmail || clientEmail,
+        clientName: webFormResult.clientName || clientName,
+        clientRut: webFormResult.clientRut,
+        clientPhone: webFormResult.clientPhone,
+        clientAddress: webFormResult.clientAddress,
         messageId,
-        attachments
-    };
+        attachments,
+        skipLegacyLookup: true
+      };
+    } else {
+      payload = {
+          subject,
+          body: finalBody,
+          clientEmail,
+          clientName,
+          messageId,
+          attachments
+      };
+    }
 
     if (targetTicketId) {
         // Appendar a ticket existente
