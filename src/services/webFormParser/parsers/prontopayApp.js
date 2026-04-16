@@ -48,31 +48,32 @@ export const prontopayAppParser = {
     const fromLower = String(from || '').toLowerCase();
     const senderMatches = fromLower.includes(INTERNAL_INBOX);
 
-    // Estructura mínima: campos "De:" y "Mensaje:" presentes
-    // Tolerante a encoding corrupto en acentos (aunque estos dos labels no tienen,
-    // dejamos el patrón robusto por consistencia)
-    const hasDe = /^\s*\*{0,2}\s*De\s*\*{0,2}\s*:/im.test(body || '');
-    const hasMensaje = /^\s*\*{0,2}\s*Mensaje\s*\*{0,2}\s*:/im.test(body || '');
-    // Señal adicional: presencia de campos con acentos (Teléfono, Razón, Número)
-    // Usamos versiones sin acento con comodín para tolerar encoding roto
-    const hasFormFields = /^\s*\*{0,2}\s*(?:Tel.fono|Raz.n\s+de\s+contacto|Email|Rut|Edificio)\s*\*{0,2}\s*:/im.test(body || '');
+    const bodyStr = body || '';
+    // Detección relajada: sin anchors de línea (^), sin exigir markdown bold.
+    // Solo verificamos que los labels existan EN ALGUNA PARTE del body.
+    // La combinación sender + estructura es suficiente para evitar falsos positivos.
+    const hasDe = /\bDe\s*:/i.test(bodyStr);
+    const hasMensaje = /\bMensaje\s*:/i.test(bodyStr);
+    // .{0,2} para acentos: cubre 0 chars (sin acento), 1 char (acento o ó), 2 chars (Ã©)
+    const hasFormFields = /(?:Tel.{0,2}fono|Raz.{0,2}n\s+de\s+contacto|Email|Rut|Edificio)\s*:/i.test(bodyStr);
     const structureMatches = hasDe && hasMensaje && hasFormFields;
 
-    // Patrón del asunto — tolerar comillas tipográficas «» o encoding corrupto de las mismas
-    const subjectMatches = /Prontomatic\s*[«\u00ab\uFFFD].+[»\u00bb\uFFFD]/i.test(subject || '');
+    // Asunto: solo verificar presencia de "Prontomatic" (señal complementaria)
+    const subjectMatches = /Prontomatic/i.test(subject || '');
+
+    // Logging diagnóstico — visible en Vercel → Logs filtrando por [WebFormParser]
+    console.info(
+      `[WebFormParser:matches] sender=${senderMatches} hasDe=${hasDe} hasMensaje=${hasMensaje} hasFields=${hasFormFields} subject=${subjectMatches} | from="${fromLower.substring(0, 50)}" subj="${(subject || '').substring(0, 60)}"`
+    );
 
     if (senderMatches && structureMatches) {
-      if (!subjectMatches) {
-        console.info(
-          `[WebFormParser] Formulario prontopay-app detectado pero el asunto no matchea el patrón esperado (subject="${subject}")`
-        );
-      }
       return true;
     }
 
     if (senderMatches && !structureMatches) {
+      // Loguear los primeros 200 chars del body para diagnóstico
       console.warn(
-        '[WebFormParser] Remitente coincide (contacto@prontomatic.cl) pero la estructura del cuerpo no matchea el formulario prontopay-app'
+        `[WebFormParser] Remitente coincide pero estructura NO matchea. body_preview="${bodyStr.substring(0, 200).replace(/\n/g, '\\n')}"`
       );
     }
 
@@ -86,17 +87,70 @@ export const prontopayAppParser = {
    */
   parse({ subject, body }) {
     const missingCritical = [];
+    let rawBody = body || '';
 
-    // Limpiar tags [group ...] antes de procesar
-    const cleanBody = cleanGroupTags(body);
+    // ============================================================
+    // PIPELINE DE SANITIZACIÓN AGRESIVA
+    // El body llega con basura de Outlook, encoding roto, escapes
+    // de Turndown, y tags de formulario inline. Limpiamos TODO
+    // antes de extraer cualquier campo.
+    // ============================================================
 
-    // --- Extracción de campos estructurados ---
+    // PASO 1: Cortar todo antes de "De:" (elimina CSS de Outlook, headers residuales, etc.)
+    // Sabemos que el formulario SIEMPRE empieza con "De:", así que todo lo anterior es basura.
+    const deIndex = rawBody.search(/\bDe\s*:/i);
+    if (deIndex > 0) {
+      console.info(`[WebFormParser:parse] Cortando ${deIndex} chars de basura antes de "De:"`);
+      rawBody = rawBody.substring(deIndex);
+    }
+
+    // PASO 2: Revertir escapes de Turndown (\[ → [, \] → ], \> → >)
+    rawBody = rawBody
+      .replace(/\\\[/g, '[')
+      .replace(/\\\]/g, ']')
+      .replace(/\\>/g, '>');
+
+    // PASO 3: Convertir links Markdown a texto plano: [text](url) → text
+    // Turndown convierte emails HTML a [email@x.com](mailto:email@x.com)
+    rawBody = rawBody.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+
+    // PASO 4: Eliminar tags [group ...] y [/group] en CUALQUIER posición
+    // (no solo en líneas propias — a veces están inline con otros campos)
+    rawBody = rawBody.replace(/\[\/?group[^\]]*\]/gi, '');
+
+    // PASO 4b: Los tags [group] dejaron un hueco; si hay otro campo-label después
+    // en la misma línea, separarlo con un salto de línea.
+    // Ej: "Problema con lavadora  Número de tarjeta:" → dos líneas separadas
+    rawBody = rawBody.replace(/\s{2,}((?:De|Rut|Tel.{0,2}fono|Email|Edificio|Raz.{0,2}n\s+de\s+contacto|N.{0,2}mero\s+de\s+tarjeta|Mensaje)\s*:)/gi, '\n$1');
+
+    // PASO 5: Normalizar acentos corruptos
+    // .{0,2} cubre: 0 chars (sin acento), 1 char (é, ó, ú, ñ, o ó), 2 chars (Ã©, Ã³)
+    rawBody = rawBody
+      .replace(/Tel.{0,2}fono/gi, 'Teléfono')
+      .replace(/Raz.{0,2}n(\s)/gi, 'Razón$1')
+      .replace(/N.{0,2}mero/gi, 'Número')
+      .replace(/Opci.{0,2}n(\s)/gi, 'Opción$1');
+
+    // PASO 6: Limpiar espacios y líneas vacías excesivas
+    rawBody = rawBody.replace(/\n{3,}/g, '\n\n').trim();
+
+    console.info(`[WebFormParser:parse] Body sanitizado (${rawBody.length} chars). Preview: "${rawBody.substring(0, 150).replace(/\n/g, '\\n')}"`);
+
+    const cleanBody = rawBody;
+
+    // ============================================================
+    // EXTRACCIÓN DE DATOS (sobre body ya limpio y normalizado)
+    // ============================================================
+
     const deRaw = extractField(cleanBody, 'De');
     const emailRaw = extractField(cleanBody, 'Email');
     const rut = extractField(cleanBody, 'Rut');
     const telefono = extractField(cleanBody, 'Teléfono');
     const edificio = extractField(cleanBody, 'Edificio');
     const razonContacto = extractField(cleanBody, 'Razón de contacto');
+
+    // Log de extracción para diagnóstico
+    console.info(`[WebFormParser:parse] Extraído → de="${deRaw}" email="${emailRaw}" rut="${rut}" tel="${telefono}" edificio="${edificio}" razon="${razonContacto}"`);
 
     // "Mensaje:" es multilínea hasta fin del body (o hasta otro label core si reaparece)
     const mensaje = extractBlockAfterLabel(
@@ -117,17 +171,19 @@ export const prontopayAppParser = {
       clientEmail = extractEmailFromString(deRaw);
     }
 
+    console.info(`[WebFormParser:parse] Cliente → name="${clientName}" email="${clientEmail}" mensaje="${(mensaje || '').substring(0, 80)}"`);
+
     // --- Validación de campos críticos ---
     if (!clientEmail) {
-      console.error('[WebFormParser] No se pudo extraer email del cliente del formulario prontopay-app');
+      console.error('[WebFormParser] FALLO: No se pudo extraer email del cliente');
       missingCritical.push('Email del cliente');
     }
     if (!clientName) {
-      console.error('[WebFormParser] No se pudo extraer nombre del cliente del formulario prontopay-app');
+      console.error('[WebFormParser] FALLO: No se pudo extraer nombre del cliente');
       missingCritical.push('Nombre del cliente');
     }
     if (!mensaje) {
-      console.error('[WebFormParser] No se pudo extraer el mensaje del cliente del formulario prontopay-app');
+      console.error('[WebFormParser] FALLO: No se pudo extraer el mensaje del cliente');
       missingCritical.push('Mensaje del cliente');
     }
 
