@@ -16,7 +16,18 @@ turndown.addRule('removeSignatureDividers', {
 
 export function htmlToMarkdown(html) {
   if (!html) return '';
-  const markdown = turndown.turndown(html);
+
+  // Pre-limpieza del HTML ANTES de Turndown:
+  // 1. Eliminar comentarios HTML (incluye bloques CSS gigantes de Outlook/Word)
+  //    Ej: <!-- /* Font Definitions */ @font-face {...} /* Style Definitions */ ... -->
+  // 2. Eliminar tags <style> y su contenido (Outlook a veces los mete fuera de comentarios)
+  // 3. Eliminar tags <o:p> de Office (párrafos vacíos de Word)
+  let cleanHtml = html
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<o:p[^>]*>[\s\S]*?<\/o:p>/gi, '');
+
+  const markdown = turndown.turndown(cleanHtml);
 
   // Limpiar referencias a imágenes embebidas por Content-ID (cid:...)
   return markdown
