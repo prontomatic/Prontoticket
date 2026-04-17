@@ -118,6 +118,13 @@ const SERVER_SPAM_MARKERS = [
   /^\*{2,}\s*phishing\s*\*{2,}/i,     // ***PHISHING***
 ];
 
+// Lista negra de remitentes internos/externos conocidos que NO deben crear tickets.
+// Se compara contra el email completo (lowercase). Agregar remitentes aquí conforme
+// se vayan identificando notificaciones automáticas que lleguen al buzón.
+const BLACKLISTED_SENDERS = [
+  'operacionesprontomatic@gmail.com',
+];
+
 // Dominios genéricos frecuentes en spam comercial disfrazado
 // Nota: estos solo suman si el remitente no tiene nombre legible (suele ser genérico)
 const SUSPICIOUS_TLDS = [
@@ -185,6 +192,16 @@ export async function analyzeEmail(emailData) {
   const fromEmail = extractEmail(from);
   const fromDomain = fromEmail.includes('@') ? fromEmail.split('@')[1] : '';
   const subjectLower = (subject || '').toLowerCase();
+
+  // Lista negra de remitentes: short-circuit con score máximo
+  if (BLACKLISTED_SENDERS.includes(fromEmail)) {
+    return {
+      score: 999,
+      reasons: [`Remitente en lista negra: ${fromEmail}`],
+      shouldFilter: true,
+      threshold: 0
+    };
+  }
 
   let score = 0;
   const reasons = [];
