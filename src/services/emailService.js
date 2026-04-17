@@ -74,27 +74,24 @@ export function stripQuotedContent(body) {
   // Cada uno busca el inicio de una línea que coincida.
   const quoteMarkers = [
     // "El [día/fecha], [persona] escribió:" (español, Gmail/Outlook)
-    // Acotamos a 300 caracteres por línea (suficiente para enlaces mailto largos)
-    /^El\s+.{1,300}escribió:\s*$/im,
+    // - hasta 500 chars para tolerar enlaces [email](mailto:email) largos
+    // - `escrib.{1,2}:` tolera "escribió" correcto o con encoding corrupto (Ã³)
+    // - sin anchor $ para tolerar contenido residual al final de línea
+    /^El\s+.{1,500}?escrib.{1,2}:/im,
 
     // "On [date], [person] wrote:" (inglés, Gmail/Outlook)
-    /^On\s+.{1,300}wrote:\s*$/im,
+    /^On\s+.{1,500}?wrote:/im,
 
-    // "El [fecha], [persona] <email> escribió:" — formato más específico con email
-    /^El\s+.{1,300}<.{1,200}>\s*escribió:\s*$/im,
+    // Separadores clásicos de "Original Message" (tolerante a espacios)
+    /^-{2,}\s*Original\s+Message\s*-{2,}/im,
+    /^-{2,}\s*Mensaje\s+Original\s*-{2,}/im,
+    /^-{2,}\s*Forwarded\s+Message\s*-{2,}/im,
+    /^-{2,}\s*Mensaje\s+Reenviado\s*-{2,}/im,
 
-    // "On [date], [person] <email> wrote:" — variante en inglés con email
-    /^On\s+.{1,300}<.{1,200}>\s*wrote:\s*$/im,
-
-    // Separadores clásicos de "Original Message"
-    /^-{2,}\s*Original Message\s*-{2,}\s*$/im,
-    /^-{2,}\s*Mensaje Original\s*-{2,}\s*$/im,
-    /^-{2,}\s*Forwarded Message\s*-{2,}\s*$/im,
-    /^-{2,}\s*Mensaje Reenviado\s*-{2,}\s*$/im,
-
-    // Bloques de headers de Outlook en correos reenviados/respondidos
-    /^From:\s*.+\nSent:\s*.+\nTo:\s*.+$/im,
-    /^De:\s*.+\nEnviado:\s*.+\nPara:\s*.+$/im,
+    // Bloques de headers de Outlook en correos reenviados/respondidos.
+    // Soporta "Enviado:" y "Enviado el:" (variante clásica de Outlook).
+    /^From:\s*.+\n(?:Sent|Enviado)(?:\s+el)?:\s*.+\nTo:\s*.+/im,
+    /^De:\s*.+\n(?:Enviado(?:\s+el)?|Sent):\s*.+\nPara:\s*.+/im,
 
     // Citas de texto plano estilo Unix: requiere AL MENOS 2 líneas consecutivas con ">"
     // para evitar cortar mensajes legítimos donde el cliente use ">" puntualmente.
