@@ -154,8 +154,10 @@ export async function POST(request) {
         }
     }
 
-    // Si es respuesta a ticket existente, limpiar historial citado del cuerpo
-    const finalBody = targetTicketId ? stripQuotedContent(bodyMarkdown) : bodyMarkdown;
+    // Limpiar historial citado del cuerpo (aplica tanto a tickets nuevos como a respuestas).
+    // stripQuotedContent tiene fallback anti-falsos-positivos: si el stripping deja <10 chars
+    // con un body original >50 chars, devuelve el body original intacto.
+    const finalBody = stripQuotedContent(bodyMarkdown);
 
     let payload;
     if (webFormResult.isWebForm) {
