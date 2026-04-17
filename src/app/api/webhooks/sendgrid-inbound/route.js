@@ -118,7 +118,7 @@ export async function POST(request) {
     // Solo aplica para correos nuevos que NO sean respuestas a tickets existentes ni formularios web.
     // Esto evita perder respuestas legítimas de clientes cuyo asunto/firma active el filtro por error.
     if (!targetTicketId && !webFormResult.isWebForm) {
-      const analysis = analyzeEmail({
+      const analysis = await analyzeEmail({
         from,
         subject,
         headersString,
