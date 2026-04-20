@@ -12,9 +12,11 @@
  */
 
 import { prontopayAppParser } from './parsers/prontopayApp.js';
+import { kiosoftWashboardParser } from './parsers/kiosoftWashboard.js';
 
 const PARSERS = [
-  prontopayAppParser
+  prontopayAppParser,
+  kiosoftWashboardParser
   // Agregar aquí nuevos parsers cuando surjan otros formularios
 ];
 
