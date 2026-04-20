@@ -211,27 +211,27 @@ export const kiosoftWashboardParser = {
     // arriba y el resto como información adicional del formulario.
     const mainBodyParts = [];
     if (machine) {
-      mainBodyParts.push(`**Máquina:** ${machine}`);
+      mainBodyParts.push(`Máquina: ${machine}`);
     }
     if (problem) {
-      mainBodyParts.push(`**Problema:** ${problem}`);
+      mainBodyParts.push(`Problema: ${problem}`);
     }
     if (otherInfo) {
-      mainBodyParts.push(`**Información adicional reportada:** ${otherInfo}`);
+      mainBodyParts.push(`Información adicional reportada: ${otherInfo}`);
     }
 
     const extraInfoParts = [];
-    if (locationAddress) extraInfoParts.push(`- **Dirección del local:** ${locationAddress}`);
-    if (roomName && roomName.toUpperCase() !== 'N/A') extraInfoParts.push(`- **Sala:** ${roomName}`);
-    if (siteCode) extraInfoParts.push(`- **Código de local:** ${siteCode}`);
-    if (readerSerial) extraInfoParts.push(`- **Serial del equipo:** ${readerSerial}`);
-    if (userPhone) extraInfoParts.push(`- **Teléfono del cliente:** ${userPhone}`);
+    if (locationAddress) extraInfoParts.push(`• Dirección del local: ${locationAddress}`);
+    if (roomName && roomName.toUpperCase() !== 'N/A') extraInfoParts.push(`• Sala: ${roomName}`);
+    if (siteCode) extraInfoParts.push(`• Código de local: ${siteCode}`);
+    if (readerSerial) extraInfoParts.push(`• Serial del equipo: ${readerSerial}`);
+    if (userPhone) extraInfoParts.push(`• Teléfono del cliente: ${userPhone}`);
 
     let finalBody = mainBodyParts.join('\n\n');
 
     if (extraInfoParts.length > 0) {
       if (finalBody.length > 0) finalBody += '\n\n';
-      finalBody += '---\n\n**Información adicional del formulario**\n\n';
+      finalBody += '───────────────\nInformación adicional del formulario\n\n';
       finalBody += extraInfoParts.join('\n');
     }
 
