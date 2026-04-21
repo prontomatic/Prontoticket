@@ -27,6 +27,7 @@ export default function DashboardPage() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
+  const [period, setPeriod] = useState('30d'); // '30d' (default) | 'all'
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -40,17 +41,26 @@ export default function DashboardPage() {
   const searchRef = useRef(null);
   const router = useRouter();
 
+  // Función reutilizable de fetch de tickets (se llama al inicio y al cambiar el período)
+  const fetchTickets = async (accessToken, periodValue) => {
+    try {
+      const res = await fetch(`/api/tickets?period=${periodValue}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      if (res.ok) setTickets(await res.json());
+      else if (res.status === 401) router.push('/');
+    } catch (err) {
+      console.error('Failed to fetch tickets', err);
+    }
+  };
+
   useEffect(() => {
     const fetchInitial = async () => {
       const { data: { session: s } } = await supabaseClient.auth.getSession();
       if (!s) { router.push('/'); return; }
       setSession(s);
       try {
-        const res = await fetch('/api/tickets', {
-          headers: { 'Authorization': `Bearer ${s.access_token}` }
-        });
-        if (res.ok) setTickets(await res.json());
-        else if (res.status === 401) router.push('/');
+        await fetchTickets(s.access_token, period);
 
         const profileRes = await fetch('/api/profile', {
           headers: { 'Authorization': `Bearer ${s.access_token}` }
@@ -71,7 +81,16 @@ export default function DashboardPage() {
       finally { setLoading(false); }
     };
     fetchInitial();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
+
+  // Refetch cuando cambia el período (sin volver a hacer todo el setup inicial)
+  useEffect(() => {
+    if (!session) return;
+    setLoading(true);
+    fetchTickets(session.access_token, period).finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -157,9 +176,54 @@ export default function DashboardPage() {
                 </h1>
                 <p style={{ fontSize: '14px', color: colors.textMuted, margin: 0 }}>
                   {totalTickets > 0
-                    ? `Gestionando ${totalTickets} ticket${totalTickets !== 1 ? 's' : ''} en total.`
-                    : 'Sin tickets por ahora. Las solicitudes aparecerán aquí.'}
+                    ? `Mostrando ${totalTickets} ticket${totalTickets !== 1 ? 's' : ''} (${period === '30d' ? 'últimos 30 días' : 'todos'}).`
+                    : 'Sin tickets en el período seleccionado.'}
                 </p>
+              </div>
+
+              {/* Toggle de período */}
+              <div style={{
+                display: 'flex',
+                gap: '4px',
+                background: colors.surfaceAlt,
+                padding: '4px',
+                borderRadius: radius.md,
+                border: `1px solid ${colors.border}`,
+              }}>
+                <button
+                  onClick={() => setPeriod('30d')}
+                  style={{
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: typography.weight.semibold,
+                    background: period === '30d' ? colors.surface : 'transparent',
+                    color: period === '30d' ? colors.textPrimary : colors.textMuted,
+                    border: 'none',
+                    borderRadius: radius.sm,
+                    cursor: 'pointer',
+                    transition: transitions.fast,
+                    boxShadow: period === '30d' ? shadows.xs : 'none',
+                  }}
+                >
+                  Últimos 30 días
+                </button>
+                <button
+                  onClick={() => setPeriod('all')}
+                  style={{
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: typography.weight.semibold,
+                    background: period === 'all' ? colors.surface : 'transparent',
+                    color: period === 'all' ? colors.textPrimary : colors.textMuted,
+                    border: 'none',
+                    borderRadius: radius.sm,
+                    cursor: 'pointer',
+                    transition: transitions.fast,
+                    boxShadow: period === 'all' ? shadows.xs : 'none',
+                  }}
+                >
+                  Todos
+                </button>
               </div>
             </div>
 
