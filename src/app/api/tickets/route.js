@@ -2,6 +2,22 @@ import { NextResponse } from 'next/server';
 import { authenticateUser } from '@/services/authService';
 import { prisma } from '@/lib/prisma';
 
+/**
+ * Calcula la fecha de inicio según el preset.
+ * @param {string} period - "7d" | "30d" | "90d" | "all"
+ * @returns {Date|null} Fecha de inicio, o null si es "all"
+ */
+function getPeriodStart(period) {
+  const now = new Date();
+  switch (period) {
+    case '7d': return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    case '30d': return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    case '90d': return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    case 'all': return null;
+    default: return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // default 30d
+  }
+}
+
 export async function GET(request) {
   const user = await authenticateUser(request);
   if (!user) {
@@ -11,11 +27,18 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status');
   const assigned_to = searchParams.get('assigned_to');
+  const period = searchParams.get('period') || '30d';
 
   const where = { deleted_at: null };
   if (status) where.status = status;
   if (assigned_to) {
     where.assigned_to = assigned_to === 'unassigned' ? null : assigned_to;
+  }
+
+  // Filtro de período (por defecto últimos 30 días para mantener el dashboard ágil)
+  const periodStart = getPeriodStart(period);
+  if (periodStart) {
+    where.created_at = { gte: periodStart };
   }
 
   if (user.profile.role === 'AGENTE') {

@@ -81,6 +81,14 @@ model Ticket {
   messages             Message[]
   status_history       StatusHistory[]
   views                TicketView[] @relation("TicketViews")
+
+  // Índices para optimizar queries frecuentes
+  @@index([status, deleted_at])
+  @@index([assigned_to, deleted_at])
+  @@index([deleted_at])
+  @@index([created_at])
+  @@index([client_email])
+  @@index([updated_at])
 }
 
 model Message {
@@ -97,6 +105,11 @@ model Message {
   ticket            Ticket     @relation(fields: [ticket_id], references: [id])
   author            Profile?   @relation("MessageAuthor", fields: [author_id], references: [id])
   attachments       Attachment[]
+
+  // Índices para optimizar queries frecuentes
+  @@index([ticket_id])
+  @@index([sent_at])
+  @@index([author_id])
 }
 
 model Attachment {
@@ -112,6 +125,9 @@ model Attachment {
 
   // Relations
   message       Message  @relation(fields: [message_id], references: [id])
+
+  // Índice para cargar adjuntos de un mensaje
+  @@index([message_id])
 }
 
 model StatusHistory {
@@ -126,6 +142,9 @@ model StatusHistory {
   // Relations
   ticket           Ticket       @relation(fields: [ticket_id], references: [id])
   agent            Profile?     @relation("ChangedByAgent", fields: [changed_by], references: [id])
+
+  // Índice para cargar historial de un ticket
+  @@index([ticket_id])
 }
 
 model Customer {
