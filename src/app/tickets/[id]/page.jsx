@@ -218,6 +218,8 @@ export default function TicketDetailPage({ params }) {
   const [categories, setCategories] = useState([]);
   const [updatingCategory, setUpdatingCategory] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
+  const [assignableUsers, setAssignableUsers] = useState([]);
+  const [updatingAssignment, setUpdatingAssignment] = useState(false);
 
   // Constantes de validación (deben coincidir con el backend)
   const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -276,6 +278,25 @@ export default function TicketDetailPage({ params }) {
     };
     init();
   }, [ticketId, router]);
+
+  // Cargar la lista de usuarios asignables cuando el perfil del usuario está listo
+  // y es SUPERVISOR o ADMINISTRADOR. Si es AGENTE, no se carga (no tiene permisos).
+  useEffect(() => {
+    if (!session || !userProfile) return;
+    if (userProfile.role !== 'SUPERVISOR' && userProfile.role !== 'ADMINISTRADOR') return;
+
+    const loadAssignables = async () => {
+      try {
+        const res = await fetch('/api/tickets/asignables', {
+          headers: { 'Authorization': `Bearer ${session.access_token}` }
+        });
+        if (res.ok) {
+          setAssignableUsers(await res.json());
+        }
+      } catch (e) { /* silencio: si falla, el selector no aparece pero el resto funciona */ }
+    };
+    loadAssignables();
+  }, [session, userProfile]);
 
   const handleTomarTicket = async () => {
     if (!session) return;
@@ -464,6 +485,37 @@ export default function TicketDetailPage({ params }) {
     } catch (e) { toast.error('Error de red'); }
   };
 
+  const handleReasignar = async (value) => {
+    if (!session) return;
+    setUpdatingAssignment(true);
+    // El selector usa la cadena "__none__" para "Sin asignar" porque
+    // radix-ui/select no acepta valores vacíos. En el backend se traduce a null.
+    const assignedTo = value === '__none__' ? null : value;
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}/asignar`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ assigned_to: assignedTo })
+      });
+      if (res.ok) {
+        if (assignedTo === null) {
+          toast.success('Ticket marcado como sin asignar');
+        } else {
+          const target = assignableUsers.find(u => u.id === assignedTo);
+          toast.success(`Ticket reasignado a ${target?.full_name || 'el usuario seleccionado'}`);
+        }
+        fetchTicket(session.access_token);
+      } else {
+        const d = await res.json();
+        toast.error(d.error || 'Error al reasignar ticket');
+      }
+    } catch (e) { toast.error('Error de red'); }
+    finally { setUpdatingAssignment(false); }
+  };
+
   if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#003F8A]" /></div>;
   if (!ticket) return <div className="min-h-screen bg-slate-50 flex p-8">No encontrado</div>;
 
@@ -473,6 +525,8 @@ export default function TicketDetailPage({ params }) {
   const isAssignedToMe = ticket.assigned_to === userId;
   const canRespond = (userRole === 'ADMINISTRADOR' || userRole === 'SUPERVISOR') || isAssignedToMe;
   const canDelete = userRole === 'ADMINISTRADOR' || userRole === 'SUPERVISOR';
+  // Solo SUPERVISOR y ADMINISTRADOR pueden reasignar, y solo en tickets no cerrados.
+  const canReassign = (userRole === 'ADMINISTRADOR' || userRole === 'SUPERVISOR') && ticket.status !== 'CERRADO';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -743,15 +797,54 @@ export default function TicketDetailPage({ params }) {
              <div className="p-5 space-y-4 text-sm">
                 <div>
                    <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Agente Asignado</p>
-                   {ticket.agent ? (
-                     <div className="flex items-center">
-                        <Avatar className="w-6 h-6 mr-2">
-                           <AvatarFallback className="bg-[#E8F0FB] text-[#003F8A] text-xs font-bold">{ticket.agent.full_name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium text-slate-800">{ticket.agent.full_name}</span>
-                     </div>
+                   {canReassign ? (
+                     <Select
+                       value={ticket.assigned_to || '__none__'}
+                       onValueChange={handleReasignar}
+                       disabled={updatingAssignment}
+                     >
+                       <SelectTrigger className="w-full h-8 text-xs font-medium rounded-md border-slate-300 bg-white">
+                         {/*
+                           Mostramos el nombre manualmente en lugar de usar <SelectValue />
+                           para evitar que Radix muestre el UUID crudo cuando la lista de
+                           assignableUsers todavía no se cargó o cuando el SelectItem
+                           contiene markup envuelto.
+                         */}
+                         {(() => {
+                           if (!ticket.assigned_to) {
+                             return <span className="italic text-slate-500">Sin asignar</span>;
+                           }
+                           // Preferimos el nombre desde la lista de asignables (más fresco);
+                           // si la lista aún no cargó, caemos al ticket.agent que viene del fetch del ticket.
+                           const fromList = assignableUsers.find(u => u.id === ticket.assigned_to);
+                           const name = fromList?.full_name || ticket.agent?.full_name;
+                           return name
+                             ? <span>{name}</span>
+                             : <span className="italic text-slate-400">Cargando...</span>;
+                         })()}
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="__none__">
+                           <span className="italic text-slate-500">Sin asignar</span>
+                         </SelectItem>
+                         {assignableUsers.map(u => (
+                           <SelectItem key={u.id} value={u.id}>
+                             {u.full_name}
+                           </SelectItem>
+                         ))}
+                       </SelectContent>
+                     </Select>
                    ) : (
-                     <span className="text-slate-500 italic block mt-2">Sin asignar</span>
+                     ticket.agent ? (
+                       <div className="flex items-center">
+                          <Avatar className="w-6 h-6 mr-2">
+                             <AvatarFallback className="bg-[#E8F0FB] text-[#003F8A] text-xs font-bold">{ticket.agent.full_name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium text-slate-800">{ticket.agent.full_name}</span>
+                       </div>
+                     ) : (
+                       <span className="text-slate-500 italic block mt-2">Sin asignar</span>
+                     )
                    )}
                 </div>
                 <div>
@@ -763,7 +856,22 @@ export default function TicketDetailPage({ params }) {
                        disabled={updatingCategory}
                      >
                        <SelectTrigger className="w-full h-8 text-xs font-medium rounded-md border-slate-300 bg-white">
-                         <SelectValue placeholder="Seleccionar categoría..." />
+                         {/*
+                           Mostramos el nombre manualmente para evitar que Radix muestre el ID
+                           crudo cuando la lista de categorías todavía no se cargó.
+                         */}
+                         {(() => {
+                           if (!ticket.category_id) {
+                             return <span className="italic text-slate-500">Sin categoría</span>;
+                           }
+                           // Preferimos el nombre desde la lista cargada; si aún no está,
+                           // caemos al ticket.category que viene del fetch del ticket.
+                           const fromList = categories.find(c => c.id === ticket.category_id);
+                           const name = fromList?.name || ticket.category?.name;
+                           return name
+                             ? <span>{name}</span>
+                             : <span className="italic text-slate-400">Cargando...</span>;
+                         })()}
                        </SelectTrigger>
                        <SelectContent>
                          <SelectItem value="none">Sin categoría</SelectItem>
