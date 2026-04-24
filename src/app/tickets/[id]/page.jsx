@@ -804,7 +804,24 @@ export default function TicketDetailPage({ params }) {
                        disabled={updatingAssignment}
                      >
                        <SelectTrigger className="w-full h-8 text-xs font-medium rounded-md border-slate-300 bg-white">
-                         <SelectValue placeholder="Seleccionar agente..." />
+                         {/*
+                           Mostramos el nombre manualmente en lugar de usar <SelectValue />
+                           para evitar que Radix muestre el UUID crudo cuando la lista de
+                           assignableUsers todavía no se cargó o cuando el SelectItem
+                           contiene markup envuelto.
+                         */}
+                         {(() => {
+                           if (!ticket.assigned_to) {
+                             return <span className="italic text-slate-500">Sin asignar</span>;
+                           }
+                           // Preferimos el nombre desde la lista de asignables (más fresco);
+                           // si la lista aún no cargó, caemos al ticket.agent que viene del fetch del ticket.
+                           const fromList = assignableUsers.find(u => u.id === ticket.assigned_to);
+                           const name = fromList?.full_name || ticket.agent?.full_name;
+                           return name
+                             ? <span>{name}</span>
+                             : <span className="italic text-slate-400">Cargando...</span>;
+                         })()}
                        </SelectTrigger>
                        <SelectContent>
                          <SelectItem value="__none__">
@@ -839,7 +856,22 @@ export default function TicketDetailPage({ params }) {
                        disabled={updatingCategory}
                      >
                        <SelectTrigger className="w-full h-8 text-xs font-medium rounded-md border-slate-300 bg-white">
-                         <SelectValue placeholder="Seleccionar categoría..." />
+                         {/*
+                           Mostramos el nombre manualmente para evitar que Radix muestre el ID
+                           crudo cuando la lista de categorías todavía no se cargó.
+                         */}
+                         {(() => {
+                           if (!ticket.category_id) {
+                             return <span className="italic text-slate-500">Sin categoría</span>;
+                           }
+                           // Preferimos el nombre desde la lista cargada; si aún no está,
+                           // caemos al ticket.category que viene del fetch del ticket.
+                           const fromList = categories.find(c => c.id === ticket.category_id);
+                           const name = fromList?.name || ticket.category?.name;
+                           return name
+                             ? <span>{name}</span>
+                             : <span className="italic text-slate-400">Cargando...</span>;
+                         })()}
                        </SelectTrigger>
                        <SelectContent>
                          <SelectItem value="none">Sin categoría</SelectItem>
