@@ -82,25 +82,59 @@ export async function PATCH(request, context) {
       return NextResponse.json({ success: true, unchanged: true });
     }
 
-    await prisma.ticket.update({
-      where: { id: ticketId },
-      data: { assigned_to }
-    });
+    // Determinar si la asignación implica una transición automática de estado:
+    //   - ABIERTO + se asigna alguien    -> EN_PROCESO_INTERNO
+    //   - EN_PROCESO_INTERNO + se desasigna (null) -> ABIERTO
+    //   - cualquier otro caso             -> no se cambia el estado
+    let newStatus = null;
+    if (ticket.status === 'ABIERTO' && assigned_to !== null) {
+      newStatus = 'EN_PROCESO_INTERNO';
+    } else if (ticket.status === 'EN_PROCESO_INTERNO' && assigned_to === null) {
+      newStatus = 'ABIERTO';
+    }
 
-    // Si se asignó a un usuario específico (no se desasignó), borrar su TicketView
-    // para este ticket (si existe). Esto hace que el badge "Nuevo" aparezca para él
-    // en su dashboard. Cubre el caso típico: el agente ya había visto el ticket
-    // cuando estaba en el pool de "sin asignar", y al reasignárselo necesitamos
-    // que el sistema lo trate como "nunca lo vio" para llamar su atención.
-    // Usamos deleteMany para que no falle si no existe el registro.
-    if (assigned_to !== null) {
-      await prisma.ticketView.deleteMany({
-        where: {
-          user_id: assigned_to,
-          ticket_id: ticketId
+    // Aplicar todos los cambios atómicamente. Si algo falla a la mitad, no queda
+    // el sistema en estado inconsistente (ej: assigned_to actualizado pero status sin cambiar).
+    await prisma.$transaction(async (tx) => {
+      // 1. Actualizar el agente asignado (y el estado si corresponde)
+      await tx.ticket.update({
+        where: { id: ticketId },
+        data: {
+          assigned_to,
+          ...(newStatus ? { status: newStatus } : {})
         }
       });
-    }
+
+      // 2. Si hubo cambio de estado, registrarlo en StatusHistory para trazabilidad.
+      //    is_system_action: false porque es una acción humana explícita
+      //    (el supervisor/admin tomó la decisión de asignar), igual que en /toma.
+      if (newStatus) {
+        await tx.statusHistory.create({
+          data: {
+            ticket_id: ticketId,
+            previous_status: ticket.status,
+            new_status: newStatus,
+            changed_by: user.id,
+            is_system_action: false
+          }
+        });
+      }
+
+      // 3. Si se asignó a un usuario específico, borrar su TicketView para este ticket
+      //    (si existe). Esto hace que el badge "Nuevo" aparezca para él en su dashboard.
+      //    Cubre el caso típico: el agente ya había visto el ticket cuando estaba en
+      //    el pool de "sin asignar", y al reasignárselo necesitamos que el sistema
+      //    lo trate como "nunca lo vio" para llamar su atención.
+      //    Usamos deleteMany para que no falle si no existe el registro.
+      if (assigned_to !== null) {
+        await tx.ticketView.deleteMany({
+          where: {
+            user_id: assigned_to,
+            ticket_id: ticketId
+          }
+        });
+      }
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
