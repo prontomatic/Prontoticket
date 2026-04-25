@@ -265,14 +265,17 @@ export default function TicketDetailPage({ params }) {
         }
       } catch (e) { /* silencio */ }
 
-      // Cargar categorías activas para el selector
+      // Cargar categorías activas para el selector.
+      // Usamos /api/categorias-disponibles (accesible a todos los roles) en lugar
+      // de /api/admin/categorias (solo SUPERVISOR/ADMINISTRADOR), porque los AGENTES
+      // también necesitan ver las categorías para asignarlas a sus tickets.
       try {
-        const catRes = await fetch('/api/admin/categorias', {
+        const catRes = await fetch('/api/categorias-disponibles', {
           headers: { 'Authorization': `Bearer ${currentSession.access_token}` }
         });
         if (catRes.ok) {
-          const cats = await catRes.json();
-          setCategories(cats.filter(c => c.is_active));
+          // El endpoint ya filtra por is_active, no hace falta filtrar acá
+          setCategories(await catRes.json());
         }
       } catch (e) { /* silencio */ }
     };
