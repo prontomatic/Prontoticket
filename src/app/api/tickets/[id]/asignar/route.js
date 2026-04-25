@@ -87,6 +87,21 @@ export async function PATCH(request, context) {
       data: { assigned_to }
     });
 
+    // Si se asignó a un usuario específico (no se desasignó), borrar su TicketView
+    // para este ticket (si existe). Esto hace que el badge "Nuevo" aparezca para él
+    // en su dashboard. Cubre el caso típico: el agente ya había visto el ticket
+    // cuando estaba en el pool de "sin asignar", y al reasignárselo necesitamos
+    // que el sistema lo trate como "nunca lo vio" para llamar su atención.
+    // Usamos deleteMany para que no falle si no existe el registro.
+    if (assigned_to !== null) {
+      await prisma.ticketView.deleteMany({
+        where: {
+          user_id: assigned_to,
+          ticket_id: ticketId
+        }
+      });
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Ticket reassign error:', error);
