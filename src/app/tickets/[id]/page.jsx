@@ -19,9 +19,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowLeft, Send, Paperclip, UserCircle, Briefcase, Phone, MapPin, CheckCircle2, LockIcon, Download, FileText, Image as ImageIcon, Video, AlertCircle, X, Plus, Trash2, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, UserCircle, Briefcase, Phone, MapPin, CheckCircle2, LockIcon, Download, FileText, Image as ImageIcon, Video, AlertCircle, X, Plus, Trash2, ShieldAlert, StickyNote, Lock } from 'lucide-react';
 
 const statusColors = {
   ABIERTO: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -221,9 +221,15 @@ export default function TicketDetailPage({ params }) {
   const [assignableUsers, setAssignableUsers] = useState([]);
   const [updatingAssignment, setUpdatingAssignment] = useState(false);
 
+  // Estado para notas internas
+  const [internalNotes, setInternalNotes] = useState([]);
+  const [noteBody, setNoteBody] = useState('');
+  const [submittingNote, setSubmittingNote] = useState(false);
+
   // Constantes de validación (deben coincidir con el backend)
   const MAX_FILE_SIZE = 25 * 1024 * 1024;
   const MAX_FILES = 5;
+  const MAX_NOTE_LENGTH = 5000;
 
   const fetchTicket = async (access_token) => {
     try {
@@ -231,7 +237,11 @@ export default function TicketDetailPage({ params }) {
         headers: { 'Authorization': `Bearer ${access_token}` }
       });
       if (res.ok) {
-        setTicket(await res.json());
+        const data = await res.json();
+        setTicket(data);
+        // Sincronizar notas internas al state local (vienen del GET ya ordenadas
+        // descendentes por created_at, las más recientes primero).
+        setInternalNotes(data.internal_notes || []);
 
         // Marcar el ticket como visto por el usuario actual (silencioso, sin bloquear UI)
         fetch(`/api/tickets/${ticketId}/marcar-visto`, {
@@ -517,6 +527,46 @@ export default function TicketDetailPage({ params }) {
       }
     } catch (e) { toast.error('Error de red'); }
     finally { setUpdatingAssignment(false); }
+  };
+
+  const handleAgregarNota = async () => {
+    if (!session) return;
+    const trimmed = noteBody.trim();
+    if (!trimmed) {
+      toast.error('La nota no puede estar vacía');
+      return;
+    }
+    if (trimmed.length > MAX_NOTE_LENGTH) {
+      toast.error(`La nota excede el límite de ${MAX_NOTE_LENGTH} caracteres`);
+      return;
+    }
+    setSubmittingNote(true);
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}/notas`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ body: trimmed })
+      });
+      if (res.ok) {
+        const newNote = await res.json();
+        // Optimistic update: prepend la nota nueva al state local en lugar de
+        // recargar todo el ticket. Las notas vienen del backend ordenadas
+        // descendente, así que la más reciente va arriba.
+        setInternalNotes(prev => [newNote, ...prev]);
+        setNoteBody('');
+        toast.success('Nota agregada');
+      } else {
+        const d = await res.json();
+        toast.error(d.error || 'Error al agregar la nota');
+      }
+    } catch (e) {
+      toast.error('Error de red');
+    } finally {
+      setSubmittingNote(false);
+    }
   };
 
   if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#003F8A]" /></div>;
@@ -892,6 +942,90 @@ export default function TicketDetailPage({ params }) {
                    )}
                 </div>
              </div>
+          </Card>
+
+          {/*
+            Tarjeta de Notas Internas
+            Diseño: fondo amarillo sutil + borde amarillo para que sea visualmente
+            imposible confundirla con la conversación con el cliente. Las notas son
+            inmutables (no se editan ni se borran) y solo visibles para el equipo.
+          */}
+          <Card className="rounded-2xl border-amber-200 shadow-sm overflow-hidden bg-amber-50">
+            <div className="px-5 py-4 bg-amber-100/50 border-b border-amber-200 font-bold text-slate-800 text-sm tracking-tight flex items-center justify-between">
+              <div className="flex items-center">
+                <StickyNote className="w-4 h-4 mr-2 text-amber-600" />
+                Notas Internas
+              </div>
+              {internalNotes.length > 0 && (
+                <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                  {internalNotes.length}
+                </span>
+              )}
+            </div>
+
+            {/* Aviso permanente: estas notas no se envían al cliente */}
+            <div className="px-5 py-2.5 bg-amber-100/30 border-b border-amber-200 flex items-center gap-2 text-xs text-amber-900">
+              <Lock className="w-3 h-3 shrink-0" />
+              <span>Visibles solo para el equipo. El cliente nunca las ve.</span>
+            </div>
+
+            {/* Lista de notas existentes */}
+            <div className="max-h-80 overflow-y-auto p-4 space-y-3">
+              {internalNotes.length === 0 ? (
+                <div className="text-center py-6 text-xs text-slate-500 italic">
+                  Sin notas internas. Agrega la primera para dejar contexto al equipo.
+                </div>
+              ) : (
+                internalNotes.map(note => (
+                  <div key={note.id} className="bg-white rounded-lg border border-amber-200 p-3 shadow-sm">
+                    <div className="flex items-baseline justify-between mb-1.5 gap-2">
+                      <span className="text-xs font-semibold text-slate-700 truncate">
+                        {note.author?.full_name || 'Usuario'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 shrink-0" title={format(new Date(note.created_at), "dd 'de' MMMM, yyyy HH:mm", { locale: es })}>
+                        {formatDistanceToNow(new Date(note.created_at), { addSuffix: true, locale: es })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
+                      {note.body}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Composer: solo si el ticket no está cerrado */}
+            {ticket.status !== 'CERRADO' ? (
+              <div className="border-t border-amber-200 p-3 bg-white">
+                <Textarea
+                  placeholder="Agregar una nota interna..."
+                  className="min-h-[60px] resize-y text-xs border-amber-200 focus-visible:ring-amber-400 bg-amber-50/30"
+                  value={noteBody}
+                  onChange={(e) => setNoteBody(e.target.value)}
+                  maxLength={MAX_NOTE_LENGTH}
+                  disabled={submittingNote}
+                />
+                <div className="flex justify-between items-center mt-2">
+                  <span className={`text-[10px] ${noteBody.length > MAX_NOTE_LENGTH * 0.9 ? 'text-amber-700 font-semibold' : 'text-slate-400'}`}>
+                    {noteBody.length} / {MAX_NOTE_LENGTH}
+                  </span>
+                  <Button
+                    onClick={handleAgregarNota}
+                    disabled={submittingNote || !noteBody.trim()}
+                    size="sm"
+                    className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-7 px-3 rounded-md"
+                  >
+                    {submittingNote ? 'Guardando...' : 'Agregar nota'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="border-t border-amber-200 px-5 py-3 bg-amber-50 text-center">
+                <p className="text-[11px] text-amber-800 italic">
+                  Ticket cerrado. Las notas existentes se mantienen como historial.
+                </p>
+              </div>
+            )}
           </Card>
 
         </div>
