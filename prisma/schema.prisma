@@ -40,10 +40,11 @@ model Profile {
   created_at     DateTime        @default(now())
 
   // Relations
-  tickets        Ticket[]        @relation("AssignedAgent")
-  messages       Message[]       @relation("MessageAuthor")
-  status_changes StatusHistory[] @relation("ChangedByAgent")
-  ticket_views   TicketView[]    @relation("UserTicketViews")
+  tickets         Ticket[]        @relation("AssignedAgent")
+  messages        Message[]       @relation("MessageAuthor")
+  status_changes  StatusHistory[] @relation("ChangedByAgent")
+  ticket_views    TicketView[]    @relation("UserTicketViews")
+  internal_notes  InternalNote[]  @relation("InternalNoteAuthor")
 }
 
 model Category {
@@ -81,6 +82,7 @@ model Ticket {
   messages             Message[]
   status_history       StatusHistory[]
   views                TicketView[] @relation("TicketViews")
+  internal_notes       InternalNote[]
 
   // Índices para optimizar queries frecuentes
   @@index([status, deleted_at])
