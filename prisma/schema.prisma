@@ -40,10 +40,11 @@ model Profile {
   created_at     DateTime        @default(now())
 
   // Relations
-  tickets        Ticket[]        @relation("AssignedAgent")
-  messages       Message[]       @relation("MessageAuthor")
-  status_changes StatusHistory[] @relation("ChangedByAgent")
-  ticket_views   TicketView[]    @relation("UserTicketViews")
+  tickets         Ticket[]        @relation("AssignedAgent")
+  messages        Message[]       @relation("MessageAuthor")
+  status_changes  StatusHistory[] @relation("ChangedByAgent")
+  ticket_views    TicketView[]    @relation("UserTicketViews")
+  internal_notes  InternalNote[]  @relation("InternalNoteAuthor")
 }
 
 model Category {
@@ -81,6 +82,7 @@ model Ticket {
   messages             Message[]
   status_history       StatusHistory[]
   views                TicketView[] @relation("TicketViews")
+  internal_notes       InternalNote[]
 
   // Índices para optimizar queries frecuentes
   @@index([status, deleted_at])
@@ -197,4 +199,20 @@ model TicketView {
   @@id([user_id, ticket_id])
   @@index([ticket_id])
   @@index([user_id])
+}
+
+model InternalNote {
+  id         Int      @id @default(autoincrement())
+  ticket_id  Int
+  author_id  String
+  body       String
+  created_at DateTime @default(now())
+
+  // Relations
+  ticket     Ticket   @relation(fields: [ticket_id], references: [id])
+  author     Profile  @relation("InternalNoteAuthor", fields: [author_id], references: [id])
+
+  // Índice para cargar notas de un ticket ordenadas por fecha
+  @@index([ticket_id, created_at])
+  @@index([author_id])
 }

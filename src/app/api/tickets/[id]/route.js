@@ -22,6 +22,12 @@ export async function GET(request, context) {
         status_history: {
           include: { agent: { select: { full_name: true } } },
           orderBy: { changed_at: 'desc' }
+        },
+        // Notas internas, más recientes primero (ordenado para mostrar
+        // las novedades arriba en la tarjeta del panel lateral)
+        internal_notes: {
+          include: { author: { select: { id: true, full_name: true } } },
+          orderBy: { created_at: 'desc' }
         }
       }
     });
