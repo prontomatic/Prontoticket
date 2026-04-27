@@ -200,3 +200,19 @@ model TicketView {
   @@index([ticket_id])
   @@index([user_id])
 }
+
+model InternalNote {
+  id         Int      @id @default(autoincrement())
+  ticket_id  Int
+  author_id  String
+  body       String
+  created_at DateTime @default(now())
+
+  // Relations
+  ticket     Ticket   @relation(fields: [ticket_id], references: [id])
+  author     Profile  @relation("InternalNoteAuthor", fields: [author_id], references: [id])
+
+  // Índice para cargar notas de un ticket ordenadas por fecha
+  @@index([ticket_id, created_at])
+  @@index([author_id])
+}
