@@ -73,17 +73,21 @@ export async function POST(request) {
     const clientName = extractName(from || '');
     const bodyMarkdown = html ? htmlToMarkdown(html) : text;
     
-    // Extraer Message-ID y referencias
+    // Extraer Message-ID y referencias.
+    // Importante: NO usar toLowerCase() sobre headersString antes de extraer,
+    // porque el dominio del Message-ID es case-sensitive en algunos servidores SMTP
+    // y eso puede romper el threading de Gmail/Outlook.
+    // Usamos el flag `i` en el regex para matching case-insensitive del nombre del header
+    // pero preservando el casing original del valor capturado.
     let messageId = null;
     let inReplyTo = null;
     let ticketIdFromSubject = null;
-    
+
     if (headersString) {
-      const hdrs = headersString.toLowerCase();
-      const msgIdMatch = hdrs.match(/message-id:\s*(<[^>]+>)/i);
+      const msgIdMatch = headersString.match(/^Message-ID:\s*(<[^>]+>)/im);
       if (msgIdMatch) messageId = msgIdMatch[1];
-      
-      const inReplyToMatch = hdrs.match(/in-reply-to:\s*(<[^>]+>)/i);
+
+      const inReplyToMatch = headersString.match(/^In-Reply-To:\s*(<[^>]+>)/im);
       if (inReplyToMatch) inReplyTo = inReplyToMatch[1];
     }
     

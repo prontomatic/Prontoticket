@@ -31,10 +31,37 @@ async function logAutomaticMessage(ticketId, body, sendStatus = 'ENVIADO') {
 }
 
 /**
+ * Busca el Message-ID del primer mensaje del cliente del ticket.
+ * Este Message-ID es el que se usa como In-Reply-To/References en todos los
+ * correos automáticos para que Gmail/Outlook los agrupen en el mismo hilo
+ * que el correo original del cliente.
+ *
+ * @param {number} ticketId
+ * @returns {Promise<string|null>} Message-ID con formato <...@...> o null si no se encontró.
+ */
+async function findOriginalMessageId(ticketId) {
+  const firstMessage = await prisma.message.findFirst({
+    where: {
+      ticket_id: ticketId,
+      sender_type: 'CLIENTE'
+    },
+    orderBy: { sent_at: 'asc' },
+    select: { message_id_header: true }
+  });
+  return firstMessage?.message_id_header || null;
+}
+
+/**
  * Envía un correo usando una plantilla del sistema.
+ *
+ * Si no se proporciona originalMessageId, lo busca desde el primer mensaje del
+ * cliente del ticket. Esto garantiza que el correo se enlace al hilo original
+ * incluso si el llamador no se acuerda de pasarlo.
+ *
  * @param {string} templateKey - Clave de la plantilla (acuse_recibo, aviso_24h, cierre_48h, csat)
  * @param {Object} ticket - Objeto del ticket
- * @param {string|null} originalMessageId - Message-ID para mantener hilo de correo
+ * @param {string|null} originalMessageId - Si se pasa explícitamente, se usa ese.
+ *                                          Si no, se busca el del primer mensaje del ticket.
  */
 async function sendTemplatedEmail(templateKey, ticket, originalMessageId = null) {
   const template = await getTemplate(templateKey);
@@ -43,12 +70,17 @@ async function sendTemplatedEmail(templateKey, ticket, originalMessageId = null)
   const subject = replaceVariables(template.subject, variables);
   const text = replaceVariables(template.body, variables);
 
+  // Si no nos pasaron el messageId explícitamente, lo buscamos.
+  // Caso típico: sendAcuseRecibo lo pasa explícito (lo tiene a mano del webhook),
+  // sendCsat / sendAviso24h / sendCierre48h no lo pasan y necesitamos buscarlo.
+  const threadMessageId = originalMessageId || await findOriginalMessageId(ticket.id);
+
   const result = await sendOutboundEmail({
     to: ticket.client_email,
     subject,
     text,
-    inReplyTo: originalMessageId,
-    references: originalMessageId
+    inReplyTo: threadMessageId,
+    references: threadMessageId
   });
 
   await logAutomaticMessage(ticket.id, text, result.success ? 'ENVIADO' : 'ERROR');
